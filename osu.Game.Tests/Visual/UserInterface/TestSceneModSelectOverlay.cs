@@ -168,6 +168,19 @@ namespace osu.Game.Tests.Visual.UserInterface
         }
 
         [Test]
+        public void TestBPMGimmickModsAreHiddenFromSelector()
+        {
+            createScreen();
+            changeRuleset(0);
+
+            AddAssert("transform hidden", () => !getPanelForMod(typeof(OsuModTransform)).Visible);
+            AddAssert("bubbles hidden", () => !getPanelForMod(typeof(OsuModBubbles)).Visible);
+            AddAssert("bloom hidden", () => !getPanelForMod(typeof(OsuModBloom)).Visible);
+            AddAssert("BPM adjust remains visible", () => getPanelForMod(typeof(OsuModBPMAdjust)).Visible);
+            AddAssert("muted remains visible", () => getPanelForMod(typeof(OsuModMuted)).Visible);
+        }
+
+        [Test]
         public void TestRulesetChange()
         {
             createScreen();

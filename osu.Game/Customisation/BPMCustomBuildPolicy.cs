@@ -14,6 +14,29 @@ namespace osu.Game.Customisation
     /// </summary>
     public static class BPMCustomBuildPolicy
     {
+        private static readonly HashSet<string> hidden_gimmick_mod_types = new HashSet<string>
+        {
+            "osu.Game.Rulesets.Osu.Mods.OsuModTransform",
+            "osu.Game.Rulesets.Osu.Mods.OsuModWiggle",
+            "osu.Game.Rulesets.Osu.Mods.OsuModSpinIn",
+            "osu.Game.Rulesets.Osu.Mods.OsuModGrow",
+            "osu.Game.Rulesets.Osu.Mods.OsuModDeflate",
+            "osu.Game.Rulesets.Osu.Mods.OsuModBarrelRoll",
+            "osu.Game.Rulesets.Osu.Mods.OsuModApproachDifferent",
+            "osu.Game.Rulesets.Osu.Mods.OsuModNoScope",
+            "osu.Game.Rulesets.Osu.Mods.OsuModMagnetised",
+            "osu.Game.Rulesets.Osu.Mods.OsuModRepel",
+            "osu.Game.Rulesets.Osu.Mods.OsuModFreezeFrame",
+            "osu.Game.Rulesets.Osu.Mods.OsuModBubbles",
+            "osu.Game.Rulesets.Osu.Mods.OsuModSynesthesia",
+            "osu.Game.Rulesets.Osu.Mods.OsuModDepth",
+            "osu.Game.Rulesets.Osu.Mods.OsuModBloom",
+            "osu.Game.Rulesets.Catch.Mods.CatchModFloatingFruits",
+            "osu.Game.Rulesets.Catch.Mods.CatchModNoScope",
+            "osu.Game.Rulesets.Catch.Mods.CatchModMovingFast",
+            "osu.Game.Rulesets.Catch.Mods.CatchModSynesthesia",
+        };
+
         public const string ISOLATED_PROFILE_ARGUMENT = "--bpm-isolated";
         public const string ISOLATED_GAME_NAME = "osu-bpm";
 
@@ -22,6 +45,9 @@ namespace osu.Game.Customisation
         public static bool ScoreSubmissionEnabled => false;
 
         public static bool CanSubmitScore(IReadOnlyList<Mod> mods) => ScoreSubmissionEnabled;
+
+        public static bool ShouldShowModInSelector(Mod mod) =>
+            !hidden_gimmick_mod_types.Contains(mod.GetType().FullName ?? string.Empty);
 
         /// <summary>
         /// The realtime server currently communicates an outdated-client rejection

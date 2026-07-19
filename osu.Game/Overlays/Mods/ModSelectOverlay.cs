@@ -20,6 +20,7 @@ using osu.Framework.Utils;
 using osu.Game.Audio;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
+using osu.Game.Customisation;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Cursor;
@@ -377,7 +378,10 @@ namespace osu.Game.Overlays.Mods
         private void filterMods()
         {
             foreach (var modState in AllAvailableMods)
-                modState.ValidForSelection.Value = modState.Mod.Type != ModType.System && modState.Mod.HasImplementation && IsValidMod.Invoke(modState.Mod);
+                modState.ValidForSelection.Value = modState.Mod.Type != ModType.System
+                                                   && modState.Mod.HasImplementation
+                                                   && BPMCustomBuildPolicy.ShouldShowModInSelector(modState.Mod)
+                                                   && IsValidMod.Invoke(modState.Mod);
         }
 
         private void updateCustomisation()

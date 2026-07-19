@@ -53,6 +53,8 @@ By default this release intentionally uses lazer's normal `osu` profile. It ther
 
 This keeps maps and collections identical between the official and BPM builds. Do not run both builds at the same time, and back up the entire lazer data directory before moving between substantially different client versions. Official lazer preserves BPM score JSON but represents the unrecognised mod as `BPM??` and cannot reproduce its gameplay rate.
 
+The BPM build hides non-practice visual/physics gimmick mods from the mod selector to keep it focused. Their implementations remain registered internally, so existing scores, replays, and presets which use them continue to resolve.
+
 For isolated testing, launch with `--bpm-isolated`. This uses a separate `osu-bpm` profile and IPC pipe:
 
 ```powershell
