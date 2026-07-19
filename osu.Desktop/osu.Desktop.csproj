@@ -9,8 +9,10 @@
     <Title>osu!</Title>
     <Product>osu!(lazer)</Product>
     <ApplicationIcon>lazer.ico</ApplicationIcon>
-    <Version>0.0.0</Version>
-    <FileVersion>0.0.0</FileVersion>
+    <!-- Keep the custom executable on the exact public lazer version used by
+         external integrations such as tosu. Source is pinned to the matching tag. -->
+    <Version>2026.711.0-lazer</Version>
+    <FileVersion>2026.711.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup>
     <StartupObject>osu.Desktop.Program</StartupObject>

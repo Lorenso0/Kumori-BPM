@@ -5,8 +5,10 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 ## Source
 
 - Upstream repository: `https://github.com/ppy/osu.git`
-- Upstream commit: `b11b274d1cb5c22eabe9dba5df14fa1e4ecc4e6d`
-- Local branch: `bpm-adjust-mod`
+- Upstream release: `2026.711.0-lazer`
+- Upstream commit: `1164870d12bd5b9714bbffa97e809bee33458799`
+- Local branch: `bpm-adjust-live-2026.711.0`
+- Executable version: `2026.711.0-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
 No unofficial osu! source files or third-party mod implementations are included.
@@ -33,13 +35,13 @@ Use **+ SAVE** below the target field to store a reusable BPM button. Click a sa
 
 For variable-BPM maps, lazer's most common BPM is changed to the target and every timing section is scaled proportionally.
 
-Local score panels display the saved target beside the **BPM** mod icon (for example, `174.5 BPM`). The target, audio mode, map-stat scaling toggle, and explicit neutral/cleared state are retained in local score, replay, and Personal Preset mod settings.
+Local score panels display the saved target beside the **BPM** mod acronym (for example, `BPM 174.5`). The target, audio mode, map-stat scaling toggle, and explicit neutral/cleared state are retained in local score, replay, and Personal Preset mod settings.
 
 ## Safety and online play
 
 The mod is always unranked, disabled in multiplayer, and incompatible with every other rate-changing mod. The custom executable never submits scores to official endpoints, whether or not BPM Adjust is selected; all scores and replays remain local.
 
-Login, chat, friends, beatmap browsing, downloads, and leaderboards remain enabled. Only the server's known pinned-version liveness response is treated as non-fatal. Other network failures continue to be reported normally.
+Login, chat, friends, beatmap browsing, downloads, and leaderboards remain enabled. The source and executable version are pinned to the current public lazer release for online and memory-reader compatibility. Only the server's known pinned-version liveness response is treated as non-fatal; other network failures continue to be reported normally.
 
 Any positive finite target is accepted. At tempos below the audio backend's 0.05x limit, the remaining slowdown is moved to frequency so the requested combined rate remains intact without crashing. The mod details show when this fallback is active. If a target/source ratio exceeds the range representable by a `double`, the nearest positive representable rate is used instead of silently returning to `1x`. Extreme rates are experimental and may cause distorted or silent audio, poor performance, or unplayable timing.
 
