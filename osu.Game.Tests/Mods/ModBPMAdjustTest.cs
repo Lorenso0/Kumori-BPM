@@ -299,7 +299,9 @@ namespace osu.Game.Tests.Mods
                 Assert.That(deserialised.TargetBPM.Value, Is.EqualTo(174.5));
                 Assert.That(deserialised.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.Nightcore));
                 Assert.That(deserialised.ScaleMapStatsWithBPM.Value, Is.False);
-                Assert.That(deserialised.ExtendedIconInformation.ToString(), Is.EqualTo("174.5 BPM"));
+                Assert.That(deserialised.Acronym, Is.EqualTo("BPM"));
+                Assert.That(deserialised.Icon, Is.Null);
+                Assert.That(deserialised.ExtendedIconInformation.ToString(), Is.EqualTo("174.5"));
                 Assert.That(presetMod.TargetBPM.Value, Is.EqualTo(174.5));
                 Assert.That(presetMod.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.Nightcore));
                 Assert.That(presetMod.ScaleMapStatsWithBPM.Value, Is.False);

@@ -25,7 +25,9 @@ namespace osu.Game.Rulesets.Mods
 
         public override string Name => "BPM Adjust";
         public override string Acronym => "BPM";
-        public override IconUsage? Icon => OsuIcon.ModDoubleTime;
+        // Use the acronym rather than borrowing DT's icon. Combined with the compact
+        // numeric extended information this renders as "BPM 200" without overlap.
+        public override IconUsage? Icon => null;
         public override ModType Type => ModType.Fun;
         public override LocalisableString Description => "Play every map at your chosen BPM.";
         public override bool Ranked => false;
@@ -127,7 +129,7 @@ namespace osu.Game.Rulesets.Mods
         }
 
         public override string ExtendedIconInformation =>
-            TargetBPM.Value == null ? string.Empty : FormattableString.Invariant($"{TargetBPM.Value.Value:0.##} BPM");
+            TargetBPM.Value == null ? string.Empty : FormattableString.Invariant($"{TargetBPM.Value.Value:0.##}");
 
         private void setSourceBPM(double bpm)
         {
