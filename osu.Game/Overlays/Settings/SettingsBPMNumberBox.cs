@@ -15,6 +15,7 @@ using osu.Framework.Input;
 using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osu.Game.Configuration;
+using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osuTK;
@@ -34,7 +35,17 @@ namespace osu.Game.Overlays.Settings
 
         private sealed partial class BPMNumberControl : CompositeDrawable, IHasCurrentValue<double?>
         {
+            private const double slider_min_bpm = 140;
+            private const double slider_max_bpm = 320;
+
             private readonly BindableWithCurrent<double?> current = new BindableWithCurrent<double?>();
+            private readonly BindableDouble sliderCurrent = new BindableDouble(180)
+            {
+                MinValue = slider_min_bpm,
+                MaxValue = slider_max_bpm,
+                Precision = 1,
+            };
+
             private readonly List<BPMPreset> presets = new List<BPMPreset>();
 
             public Bindable<double?> Current
@@ -48,6 +59,7 @@ namespace osu.Game.Overlays.Settings
             private RoundedButton? addPresetButton;
             private Bindable<string>? presetStorage;
             private bool updatingFromText;
+            private bool updatingSlider;
 
             public BPMNumberControl()
             {
@@ -65,6 +77,43 @@ namespace osu.Game.Overlays.Settings
                         {
                             RelativeSizeAxes = Axes.X,
                             CommitOnFocusLost = true
+                        },
+                        new GridContainer
+                        {
+                            RelativeSizeAxes = Axes.X,
+                            Height = 25,
+                            ColumnDimensions =
+                            [
+                                new Dimension(GridSizeMode.Absolute, 35),
+                                new Dimension(),
+                                new Dimension(GridSizeMode.Absolute, 35),
+                            ],
+                            Content = new[]
+                            {
+                                new Drawable[]
+                                {
+                                    new OsuSpriteText
+                                    {
+                                        Text = slider_min_bpm.ToString(CultureInfo.InvariantCulture),
+                                        Anchor = Anchor.CentreLeft,
+                                        Origin = Anchor.CentreLeft,
+                                    },
+                                    new RoundedSliderBar<double>
+                                    {
+                                        RelativeSizeAxes = Axes.X,
+                                        Anchor = Anchor.Centre,
+                                        Origin = Anchor.Centre,
+                                        Current = sliderCurrent,
+                                        KeyboardStep = 1,
+                                    },
+                                    new OsuSpriteText
+                                    {
+                                        Text = slider_max_bpm.ToString(CultureInfo.InvariantCulture),
+                                        Anchor = Anchor.CentreRight,
+                                        Origin = Anchor.CentreRight,
+                                    },
+                                }
+                            }
                         },
                         presetsFlow = new FillFlowContainer
                         {
@@ -114,11 +163,29 @@ namespace osu.Game.Overlays.Settings
                     }
                 });
 
+                sliderCurrent.BindValueChanged(e =>
+                {
+                    if (!updatingSlider)
+                        Current.Value = e.NewValue;
+                });
+
                 Current.BindValueChanged(e =>
                 {
                     // Preserve transient input such as a trailing decimal separator while editing.
                     if (!updatingFromText && !numberBox.HasFocus)
                         numberBox.Current.Value = e.NewValue?.ToString("0.##", CultureInfo.CurrentCulture) ?? string.Empty;
+
+                    updatingSlider = true;
+
+                    try
+                    {
+                        if (e.NewValue is double value && double.IsFinite(value))
+                            sliderCurrent.Value = Math.Clamp(value, slider_min_bpm, slider_max_bpm);
+                    }
+                    finally
+                    {
+                        updatingSlider = false;
+                    }
 
                     updateAddPresetButton();
                 });

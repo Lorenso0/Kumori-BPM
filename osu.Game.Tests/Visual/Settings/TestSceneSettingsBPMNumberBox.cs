@@ -17,6 +17,7 @@ namespace osu.Game.Tests.Visual.Settings
     {
         private SettingsBPMNumberBox numberBox = null!;
         private OsuTextBox textBox = null!;
+        private RoundedSliderBar<double> slider = null!;
 
         [Resolved]
         private OsuConfigManager config { get; set; } = null!;
@@ -27,6 +28,27 @@ namespace osu.Game.Tests.Visual.Settings
             AddStep("clear BPM presets", () => config.SetValue(OsuSetting.BPMAdjustPresets, string.Empty));
             AddStep("create BPM number box", () => Child = numberBox = new SettingsBPMNumberBox());
             AddStep("get inner text box", () => textBox = numberBox.ChildrenOfType<OsuTextBox>().Single());
+            AddStep("get BPM slider", () => slider = numberBox.ChildrenOfType<RoundedSliderBar<double>>().Single());
+        }
+
+        [Test]
+        public void TestSliderRangeAndTextSynchronisation()
+        {
+            AddStep("move slider below range", () => slider.Current.Value = 0);
+            AddAssert("slider minimum is 140", () => slider.Current.Value, () => Is.EqualTo(140));
+            AddStep("move slider above range", () => slider.Current.Value = 1000);
+            AddAssert("slider maximum is 320", () => slider.Current.Value, () => Is.EqualTo(320));
+            AddStep("move slider to 220", () => slider.Current.Value = 220);
+            AddAssert("slider updates target", () => numberBox.Current.Value, () => Is.EqualTo(220));
+            AddAssert("slider updates text", () => textBox.Text, () => Is.EqualTo("220"));
+
+            AddStep("type target below slider", () => textBox.Text = "100");
+            AddAssert("typed low target remains valid", () => numberBox.Current.Value, () => Is.EqualTo(100));
+            AddAssert("slider clamps visually to minimum", () => slider.Current.Value, () => Is.EqualTo(140));
+
+            AddStep("type target above slider", () => textBox.Text = "400");
+            AddAssert("typed high target remains valid", () => numberBox.Current.Value, () => Is.EqualTo(400));
+            AddAssert("slider clamps visually to maximum", () => slider.Current.Value, () => Is.EqualTo(320));
         }
 
         [Test]

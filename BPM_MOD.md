@@ -16,7 +16,7 @@ No unofficial osu! source files or third-party mod implementations are included.
 1. Open solo song select and choose a beatmap.
 2. Open the mod selector.
 3. Find **BPM Adjust (BPM)** in the Fun column.
-4. Enter a positive target BPM with up to two decimal places.
+4. Enter a positive target BPM with up to two decimal places, or use the synchronized 140–320 BPM slider. Typed values outside the slider range remain valid.
 5. Select an audio mode:
    - **Preserve Pitch** changes tempo without shifting the song's pitch.
    - **Adjust Pitch** changes pitch with playback speed.
