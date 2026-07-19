@@ -11,6 +11,7 @@ using osu.Framework.Development;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
 using osu.Game;
+using osu.Game.Customisation;
 using osu.Game.IPC;
 using osu.Game.Tournament;
 using SDL;
@@ -76,6 +77,7 @@ namespace osu.Desktop
 
             string gameName = base_game_name;
             bool tournamentClient = false;
+            bool isolatedBPMProfile = false;
 
             foreach (string arg in args)
             {
@@ -86,6 +88,11 @@ namespace osu.Desktop
 
                 switch (key)
                 {
+                    case BPMCustomBuildPolicy.ISOLATED_PROFILE_ARGUMENT:
+                        isolatedBPMProfile = true;
+                        gameName = BPMCustomBuildPolicy.ISOLATED_GAME_NAME;
+                        break;
+
                     case "--tournament":
                         tournamentClient = true;
                         break;
@@ -104,7 +111,9 @@ namespace osu.Desktop
 
             var hostOptions = new HostOptions
             {
-                IPCPipeName = !tournamentClient ? OsuGame.IPC_PIPE_NAME : null,
+                IPCPipeName = !tournamentClient
+                    ? isolatedBPMProfile ? BPMCustomBuildPolicy.ISOLATED_GAME_NAME : OsuGame.IPC_PIPE_NAME
+                    : null,
                 FriendlyGameName = OsuGameBase.GAME_NAME,
             };
 

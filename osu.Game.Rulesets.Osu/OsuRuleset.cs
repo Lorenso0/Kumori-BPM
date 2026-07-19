@@ -215,6 +215,7 @@ namespace osu.Game.Rulesets.Osu
                         new OsuModNoScope(),
                         new MultiMod(new OsuModMagnetised(), new OsuModRepel()),
                         new ModAdaptiveSpeed(),
+                        new OsuModBPMAdjust(),
                         new OsuModFreezeFrame(),
                         new OsuModBubbles(),
                         new OsuModSynesthesia(),

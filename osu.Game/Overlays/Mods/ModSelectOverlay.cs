@@ -234,10 +234,13 @@ namespace osu.Game.Overlays.Mods
             SelectedMods.BindValueChanged(_ =>
             {
                 updateFromExternalSelection();
+                updateSelectedModsFromBeatmap();
                 updateCustomisation();
 
                 ActiveMods.Value = ComputeActiveMods();
             }, true);
+
+            Beatmap.BindValueChanged(_ => updateSelectedModsFromBeatmap(), true);
 
             customisationPanel.ExpandedState.BindValueChanged(_ => updateCustomisationVisualState(), true);
 
@@ -470,6 +473,14 @@ namespace osu.Game.Overlays.Mods
                                                      .ToArray();
 
             SelectedMods.Value = ComputeNewModsFromSelection(SelectedMods.Value, candidateSelection);
+        }
+
+        private void updateSelectedModsFromBeatmap()
+        {
+            if (Beatmap.Value?.BeatmapInfo is not IBeatmapInfo beatmapInfo)
+                return;
+
+            SelectedMods.Value.ApplyBeatmapInfo(beatmapInfo);
         }
 
         #region Transition handling

@@ -416,6 +416,9 @@ namespace osu.Game.Rulesets
             foreach (var mod in mods.OfType<IApplicableToDifficulty>())
                 mod.ApplyToDifficulty(adjustedDifficulty);
 
+            foreach (var mod in mods.OfType<IApplicableToDifficultyAfterMods>())
+                mod.ApplyToDifficultyAfterMods(adjustedDifficulty);
+
             return adjustedDifficulty;
         }
 

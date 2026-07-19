@@ -20,6 +20,7 @@ using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Rulesets.Osu.Mods;
 using osu.Game.Rulesets.Scoring;
+using osu.Game.Rulesets.UI;
 using osu.Game.Scoring;
 using osu.Game.Screens.Select;
 using osu.Game.Tests.Resources;
@@ -209,6 +210,31 @@ namespace osu.Game.Tests.Visual.SongSelect
             });
             AddAssert("mods received HD", () => score.SelectedMods.Value.Any(m => m is OsuModHidden));
             AddAssert("mods did not receive SV2", () => !score.SelectedMods.Value.Any(m => m is ModScoreV2));
+        }
+
+        [Test]
+        public void TestBPMTargetShownOnLocalScore()
+        {
+            BeatmapLeaderboardScore score = null!;
+
+            AddStep("create local BPM score", () =>
+            {
+                var scoreInfo = TestResources.CreateTestScoreInfo();
+                scoreInfo.Mods =
+                [
+                    new OsuModBPMAdjust
+                    {
+                        TargetBPM = { Value = 174.5 }
+                    }
+                ];
+
+                Child = score = new BeatmapLeaderboardScore(scoreInfo, sheared: false);
+                score.Show();
+            });
+
+            AddUntilStep("BPM mod icon loaded", () => score.ChildrenOfType<ModIcon>().SingleOrDefault()?.IsLoaded, () => Is.True);
+            AddAssert("selected BPM is visible",
+                () => score.ChildrenOfType<OsuSpriteText>().Any(text => text.IsPresent && text.Text.ToString() == "174.5 BPM"));
         }
 
         public override void SetUpSteps()

@@ -44,6 +44,12 @@ namespace osu.Game.Configuration
         /// </remarks>
         public Type? SettingControlType { get; set; }
 
+        /// <summary>
+        /// Whether a control should be created for this setting. Hidden settings are
+        /// still cloned and serialised, allowing mods to retain lifecycle state.
+        /// </summary>
+        public bool Visible { get; set; } = true;
+
         public SettingSourceAttribute(Type declaringType, string label, string? description = null)
         {
             Label = getLocalisableStringFromMember(label) ?? string.Empty;
@@ -113,6 +119,9 @@ namespace osu.Game.Configuration
         {
             foreach (var (attr, property) in obj.GetOrderedSettingsSourceProperties())
             {
+                if (!attr.Visible)
+                    continue;
+
                 object value = property.GetValue(obj)!;
 
                 if (attr.SettingControlType != null)

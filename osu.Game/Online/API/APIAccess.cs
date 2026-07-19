@@ -21,6 +21,7 @@ using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Logging;
 using osu.Game.Configuration;
+using osu.Game.Customisation;
 using osu.Game.Localisation;
 using osu.Game.Online.API.Requests;
 using osu.Game.Online.API.Requests.Responses;
@@ -275,14 +276,30 @@ namespace osu.Game.Online.API
             }
 
             reason = req.ResponseObject.Reason;
+
+            // The pinned custom build keeps API-backed social features available.
+            // Treat only the server's version-gate response as non-fatal so login,
+            // chat, beatmap browsing, and downloads can continue normally.
+            if (BPMCustomBuildPolicy.IsExpectedPinnedVersionRejection(reason))
+            {
+                log.Add(reason, LogLevel.Verbose);
+                return true;
+            }
+
             return req.ResponseObject.Status != LivenessProbeResponse.LivenessStatus.Down;
         }
 
         private void triggerOutage(string reason)
         {
-            state.Value = APIState.Failing;
             string userFacingMessage = reason ?? "Online functionality is not available due to an outage. Sorry for the inconvenience.";
 
+            if (BPMCustomBuildPolicy.IsExpectedPinnedVersionRejection(userFacingMessage))
+            {
+                log.Add(userFacingMessage, LogLevel.Verbose);
+                return;
+            }
+
+            state.Value = APIState.Failing;
             userFacingOutageMessage.Value = userFacingMessage;
 
             Schedule(() =>

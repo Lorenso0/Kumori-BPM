@@ -19,6 +19,7 @@ using osu.Game.Online.API;
 using osu.Game.Online.Multiplayer;
 using osu.Game.Online.Rooms;
 using osu.Game.Online.Spectator;
+using osu.Game.Customisation;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Rulesets.Scoring;
@@ -96,6 +97,12 @@ namespace osu.Game.Screens.Play
 
         private bool handleTokenRetrieval()
         {
+            if (!BPMCustomBuildPolicy.CanSubmitScore(Mods.Value))
+            {
+                Logger.Log("Custom BPM build: official score submission is disabled; the score will remain local.");
+                return false;
+            }
+
             // Token request construction should happen post-load to allow derived classes to potentially prepare DI backings that are used to create the request.
             var tcs = new TaskCompletionSource<bool>();
 

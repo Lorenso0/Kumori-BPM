@@ -148,6 +148,26 @@ namespace osu.Game.Tests.Visual.UserInterface
         }
 
         [Test]
+        public void TestBPMAdjustTracksSelectedBeatmapAndKeepsTarget()
+        {
+            AddStep("set initial BPM", () => Beatmap.Value.BeatmapInfo.BPM = 120);
+            createScreen();
+            AddStep("select BPM adjust", () => SelectedMods.Value = [new OsuModBPMAdjust()]);
+            AddUntilStep("target initialised", () => getSelectedMod<OsuModBPMAdjust>().TargetBPM.Value, () => Is.EqualTo(120));
+            AddAssert("initial rate neutral", () => getSelectedMod<OsuModBPMAdjust>().SpeedChange.Value, () => Is.EqualTo(1));
+            AddStep("set target to 180", () => getSelectedMod<OsuModBPMAdjust>().TargetBPM.Value = 180);
+            AddAssert("rate is 1.5x", () => getSelectedMod<OsuModBPMAdjust>().SpeedChange.Value, () => Is.EqualTo(1.5));
+            AddStep("switch to 200 BPM map", () =>
+            {
+                var beatmap = CreateWorkingBeatmap(new OsuRuleset().RulesetInfo);
+                beatmap.BeatmapInfo.BPM = 200;
+                modSelectOverlay.Beatmap.Value = beatmap;
+            });
+            AddAssert("target persisted", () => getSelectedMod<OsuModBPMAdjust>().TargetBPM.Value, () => Is.EqualTo(180));
+            AddAssert("rate recomputed", () => getSelectedMod<OsuModBPMAdjust>().SpeedChange.Value, () => Is.EqualTo(0.9).Within(1e-12));
+        }
+
+        [Test]
         public void TestRulesetChange()
         {
             createScreen();
