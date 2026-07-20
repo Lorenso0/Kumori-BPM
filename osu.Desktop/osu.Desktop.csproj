@@ -13,6 +13,7 @@
          external integrations such as tosu. Source is pinned to the matching tag. -->
     <Version>2026.711.0-lazer</Version>
     <FileVersion>2026.711.0</FileVersion>
+    <RuntimeFrameworkVersion>8.0.27</RuntimeFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup>
     <StartupObject>osu.Desktop.Program</StartupObject>

@@ -8,6 +8,7 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 - Upstream release: `2026.711.0-lazer`
 - Upstream commit: `1164870d12bd5b9714bbffa97e809bee33458799`
 - Local branch: `bpm-adjust-live-2026.711.0`
+- Kumori release: `2026.711.0-kumori.1`
 - Executable version: `2026.711.0-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
@@ -60,7 +61,7 @@ The BPM build hides non-practice visual/physics gimmick mods from the mod select
 For isolated testing, launch with `--bpm-isolated`. This uses a separate `osu-bpm` profile and IPC pipe:
 
 ```powershell
-& ".\artifacts\kumori-osu-2026.711\osu!.exe" --bpm-isolated
+& ".\osu!.exe" --bpm-isolated
 ```
 
 ## Build
@@ -69,15 +70,17 @@ The required .NET 8 SDK is selected by `global.json`.
 
 ```powershell
 dotnet restore osu.Desktop.slnf
-dotnet test osu.Game.Tests/osu.Game.Tests.csproj --filter "FullyQualifiedName~ModBPMAdjust"
 dotnet build osu.Desktop.slnf -c Release
-dotnet publish osu.Desktop/osu.Desktop.csproj -c Release -r win-x64 --self-contained true -o artifacts/kumori-osu-2026.711
+dotnet test osu.Game.Tests/osu.Game.Tests.csproj -c Release --filter "FullyQualifiedName~ModBPMAdjust|FullyQualifiedName~BPMCustomBuildPolicy"
+dotnet test osu.Game.Rulesets.Osu.Tests/osu.Game.Rulesets.Osu.Tests.csproj -c Release --filter "FullyQualifiedName~ModBPMAdjust"
+.\scripts\Publish-Release.ps1
 ```
 
-Run the published client with:
+The audited release ZIP and SHA-256 checksum are written to
+`artifacts/releases/`. Extract the ZIP, then run:
 
 ```powershell
-& ".\artifacts\kumori-osu-2026.711\osu!.exe"
+& ".\osu!.exe"
 ```
 
 This is a custom client build. It cannot be installed as a mod DLL into the official osu!lazer release.
