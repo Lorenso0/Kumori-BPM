@@ -35,6 +35,9 @@ jobs:
             **/*.props
             global.json
 
+      - name: Restore pinned build tools
+        run: dotnet tool restore
+
       - name: Restore
         run: |
           dotnet restore osu.Desktop.slnf
