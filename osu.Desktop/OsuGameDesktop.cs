@@ -122,14 +122,14 @@ namespace osu.Desktop
                 LocalConfig.SetValue(OsuSetting.ReleaseStream, ReleaseStream.Lazer);
 
             if (IsPackageManaged)
-                return new NoActionUpdateManager();
+                return new UpdateManager();
 
             return new VelopackUpdateManager();
         }
 
         public override bool RestartAppWhenExited()
         {
-            if (!BPMCustomBuildPolicy.SelfUpdatesEnabled)
+            if (!BPMCustomBuildPolicy.SelfUpdatesEnabled || IsPackageManaged || !VelopackUpdateManager.IsInstalled)
                 return false;
 
             RestartOnExitAction = () => Velopack.UpdateExe.Start(waitPid: (uint)Environment.ProcessId);

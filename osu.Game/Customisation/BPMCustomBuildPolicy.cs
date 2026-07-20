@@ -39,8 +39,11 @@ namespace osu.Game.Customisation
 
         public const string ISOLATED_PROFILE_ARGUMENT = "--bpm-isolated";
         public const string ISOLATED_GAME_NAME = "osu-bpm";
+        public const string UPDATE_REPOSITORY_URL = "https://github.com/Lorenso0/Kumori-BPM";
+        public const string UPDATE_RELEASES_URL = UPDATE_REPOSITORY_URL + "/releases/latest";
+        public const string VELOPACK_APP_ID = "KumoriBPM";
 
-        public static bool SelfUpdatesEnabled => false;
+        public static bool SelfUpdatesEnabled => true;
         public static bool OnlineChatEnabled => true;
         public static bool OnlineBeatmapAccessEnabled => true;
         public static bool ScoreSubmissionEnabled => false;

@@ -6,8 +6,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Logging;
+using osu.Framework.Platform;
 using osu.Framework.Threading;
 using osu.Game;
+using osu.Game.Configuration;
+using osu.Game.Customisation;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Screens.Play;
@@ -19,6 +22,23 @@ namespace osu.Desktop.Updater
 {
     public partial class VelopackUpdateManager : UpdateManager
     {
+        public override ReleaseStream? FixedReleaseStream => osu.Game.Configuration.ReleaseStream.Lazer;
+
+        public static bool IsInstalled
+        {
+            get
+            {
+                try
+                {
+                    return createVelopackUpdateManager().IsInstalled;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
         [Resolved]
         private INotificationOverlay notificationOverlay { get; set; } = null!;
 
@@ -27,6 +47,9 @@ namespace osu.Desktop.Updater
 
         [Resolved]
         private ILocalUserPlayInfo? localUserInfo { get; set; }
+
+        [Resolved]
+        private GameHost host { get; set; } = null!;
 
         private bool isInGameplay => localUserInfo?.PlayingState.Value != LocalUserPlayingState.NotPlaying;
 
@@ -55,11 +78,23 @@ namespace osu.Desktop.Updater
 
             try
             {
-                IUpdateSource updateSource = new GithubSource(@"https://github.com/ppy/osu", null, ReleaseStream.Value == Game.Configuration.ReleaseStream.Tachyon);
-                Velopack.UpdateManager updateManager = new Velopack.UpdateManager(updateSource, new UpdateOptions
+                Velopack.UpdateManager updateManager = createVelopackUpdateManager();
+
+                if (!updateManager.IsInstalled)
                 {
-                    AllowVersionDowngrade = true
-                });
+                    log("This build is not managed by Velopack; directing the user to the Kumori installer");
+                    notificationOverlay.Post(new UpdateAvailableNotification(cancellationToken)
+                    {
+                        Text = "Automatic updates require the Kumori installer. Click here to download the latest release.",
+                        Activated = () =>
+                        {
+                            host.OpenUrlExternally(BPMCustomBuildPolicy.UPDATE_RELEASES_URL);
+                            return true;
+                        }
+                    });
+
+                    return true;
+                }
 
                 UpdateInfo? update = await updateManager.CheckForUpdatesAsync().ConfigureAwait(false);
 
@@ -150,6 +185,15 @@ namespace osu.Desktop.Updater
         {
             game.RestartOnExitAction = () => updateManager.WaitExitThenApplyUpdates(update.TargetFullRelease);
             game.AttemptExit();
+        }
+
+        private static Velopack.UpdateManager createVelopackUpdateManager()
+        {
+            IUpdateSource updateSource = new GithubSource(BPMCustomBuildPolicy.UPDATE_REPOSITORY_URL, null, false);
+            return new Velopack.UpdateManager(updateSource, new UpdateOptions
+            {
+                AllowVersionDowngrade = false
+            });
         }
 
         private static void log(string text) => Logger.Log($"VelopackUpdateManager: {text}");

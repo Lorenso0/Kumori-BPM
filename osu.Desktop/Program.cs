@@ -37,7 +37,7 @@ namespace osu.Desktop
             // IMPORTANT DON'T IGNORE: For general sanity, velopack's setup needs to run before anything else.
             // This has bitten us in the rear before (bricked updater), and although the underlying issue from
             // last time has been fixed, let's not tempt fate.
-            setupVelopack(args);
+            createVelopackApp(args)?.Run();
 
             if (OperatingSystem.IsWindows())
             {
@@ -187,12 +187,12 @@ namespace osu.Desktop
             return false;
         }
 
-        private static void setupVelopack(string[] args)
+        private static VelopackApp? createVelopackApp(string[] args)
         {
             if (!BPMCustomBuildPolicy.SelfUpdatesEnabled)
             {
                 Logger.Log("Self-updates are disabled for this custom build. Skipping Velopack setup.");
-                return;
+                return null;
             }
 
             // Arguments being present indicate the user is either starting the game in a special (aka tournament) mode,
@@ -205,13 +205,13 @@ namespace osu.Desktop
             if (args.Length > 0 && !args[0].StartsWith("--velo", StringComparison.Ordinal))
             {
                 Logger.Log("Handling arguments, skipping velopack setup.");
-                return;
+                return null;
             }
 
             if (OsuGameDesktop.IsPackageManaged)
             {
                 Logger.Log("Updates are being managed by an external provider. Skipping Velopack setup.");
-                return;
+                return null;
             }
 
             var app = VelopackApp.Build();
@@ -221,7 +221,7 @@ namespace osu.Desktop
             if (OperatingSystem.IsWindows())
                 configureWindows(app);
 
-            app.Run();
+            return app;
         }
 
         [SupportedOSPlatform("windows")]

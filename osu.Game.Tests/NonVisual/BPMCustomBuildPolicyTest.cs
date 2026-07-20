@@ -27,6 +27,19 @@ namespace osu.Game.Tests.NonVisual
         }
 
         [Test]
+        public void TestUpdaterTargetsOnlyKumoriReleases()
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(BPMCustomBuildPolicy.SelfUpdatesEnabled, Is.True);
+                Assert.That(BPMCustomBuildPolicy.UPDATE_REPOSITORY_URL, Is.EqualTo("https://github.com/Lorenso0/Kumori-BPM"));
+                Assert.That(BPMCustomBuildPolicy.UPDATE_REPOSITORY_URL, Does.Not.Contain("ppy/osu"));
+                Assert.That(BPMCustomBuildPolicy.UPDATE_RELEASES_URL, Is.EqualTo("https://github.com/Lorenso0/Kumori-BPM/releases/latest"));
+                Assert.That(BPMCustomBuildPolicy.VELOPACK_APP_ID, Is.EqualTo("KumoriBPM"));
+            });
+        }
+
+        [Test]
         public void TestOnlyPinnedVersionRejectionIsDemoted()
         {
             Assert.Multiple(() =>

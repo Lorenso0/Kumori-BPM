@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string] $ReleaseVersion,
+    [string] $VelopackBaseDirectory,
     [switch] $NoRestore
 )
 
@@ -31,8 +32,11 @@ if ($ReleaseVersion -ne $configuredVersion) {
 $releaseRoot = Join-Path $repositoryRoot 'artifacts/releases'
 $workingRoot = Join-Path $releaseRoot "_work-$ReleaseVersion"
 $stageDirectory = Join-Path $workingRoot 'stage'
+$velopackDirectory = Join-Path $workingRoot 'velopack'
 $zipPath = Join-Path $releaseRoot "kumori-osu-$ReleaseVersion-win-x64.zip"
 $checksumPath = "$zipPath.sha256"
+$velopackAppId = 'KumoriBPM'
+$velopackChannel = 'win'
 
 $resolvedArtifacts = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot 'artifacts'))
 $resolvedWorking = [System.IO.Path]::GetFullPath($workingRoot)
@@ -44,6 +48,7 @@ if (Test-Path -LiteralPath $workingRoot) {
     Remove-Item -LiteralPath $workingRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $stageDirectory -Force | Out-Null
+New-Item -ItemType Directory -Path $velopackDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 
 $publishArguments = @(
@@ -113,6 +118,93 @@ foreach ($requiredFile in $requiredFiles) {
     }
 }
 
+if (-not [string]::IsNullOrWhiteSpace($VelopackBaseDirectory)) {
+    $resolvedVelopackBase = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $VelopackBaseDirectory))
+
+    if (-not (Test-Path -LiteralPath $resolvedVelopackBase -PathType Container)) {
+        throw "Velopack base directory '$resolvedVelopackBase' does not exist."
+    }
+
+    Get-ChildItem -LiteralPath $resolvedVelopackBase -File |
+        Copy-Item -Destination $velopackDirectory -Force
+}
+
+[xml] $desktopProject = Get-Content -LiteralPath (Join-Path $repositoryRoot 'osu.Desktop/osu.Desktop.csproj')
+$velopackPackageReference = $desktopProject.SelectSingleNode('/Project/ItemGroup/PackageReference[@Include="Velopack"]')
+$velopackPackageVersion = ([string] $velopackPackageReference.Version).Trim()
+$toolManifest = Get-Content -LiteralPath (Join-Path $repositoryRoot '.config/dotnet-tools.json') -Raw | ConvertFrom-Json
+$velopackToolVersion = ([string] $toolManifest.tools.vpk.version).Trim()
+
+if ([string]::IsNullOrWhiteSpace($velopackPackageVersion) -or $velopackPackageVersion -ne $velopackToolVersion) {
+    throw "Velopack SDK version '$velopackPackageVersion' does not match vpk tool version '$velopackToolVersion'."
+}
+
+$customBuildPolicy = Get-Content -LiteralPath (Join-Path $repositoryRoot 'osu.Game/Customisation/BPMCustomBuildPolicy.cs') -Raw
+if ($customBuildPolicy -notmatch "VELOPACK_APP_ID\s*=\s*`"$([regex]::Escape($velopackAppId))`"") {
+    throw "Velopack package ID '$velopackAppId' does not match BPMCustomBuildPolicy.VELOPACK_APP_ID."
+}
+if ($customBuildPolicy -notmatch 'UPDATE_REPOSITORY_URL\s*=\s*"https://github\.com/Lorenso0/Kumori-BPM"') {
+    throw 'BPMCustomBuildPolicy does not target the Kumori GitHub repository.'
+}
+
+$velopackArguments = @(
+    'tool', 'run', 'vpk', '--',
+    '--skip-updates',
+    'pack',
+    '--outputDir', $velopackDirectory,
+    '--channel', $velopackChannel,
+    '--runtime', 'win-x64',
+    '--packId', $velopackAppId,
+    '--packVersion', $ReleaseVersion,
+    '--packDir', $stageDirectory,
+    '--packAuthors', 'Lorenso0',
+    '--packTitle', 'Kumori BPM',
+    '--releaseNotes', (Join-Path $repositoryRoot 'RELEASE.md'),
+    '--icon', (Join-Path $repositoryRoot 'osu.Desktop/kumori.ico'),
+    '--mainExe', 'osu!.exe',
+    '--yes'
+)
+
+& dotnet @velopackArguments
+if ($LASTEXITCODE -ne 0) {
+    throw "Velopack packaging failed with exit code $LASTEXITCODE."
+}
+
+$velopackRequiredFiles = @(
+    "$velopackAppId-$velopackChannel-Setup.exe",
+    "$velopackAppId-$velopackChannel-Portable.zip",
+    "$velopackAppId-$ReleaseVersion-full.nupkg",
+    "releases.$velopackChannel.json",
+    'RELEASES',
+    "assets.$velopackChannel.json"
+)
+foreach ($requiredFile in $velopackRequiredFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $velopackDirectory $requiredFile))) {
+        throw "Velopack audit is missing required file '$requiredFile'."
+    }
+}
+
+$velopackReleaseIndex = Get-Content -LiteralPath (Join-Path $velopackDirectory "releases.$velopackChannel.json") -Raw | ConvertFrom-Json
+$currentFullAsset = @(
+    @($velopackReleaseIndex.Assets) |
+        Where-Object {
+            $_.PackageId -eq $velopackAppId -and
+            $_.Version -eq $ReleaseVersion -and
+            $_.Type -eq 'Full'
+        }
+)
+if ($currentFullAsset.Count -ne 1) {
+    throw "Velopack release index does not contain exactly one full $velopackAppId $ReleaseVersion package."
+}
+
+foreach ($downloadName in @("$velopackAppId-$velopackChannel-Setup.exe", "$velopackAppId-$velopackChannel-Portable.zip")) {
+    $downloadPath = Join-Path $velopackDirectory $downloadName
+    $downloadHash = (Get-FileHash -LiteralPath $downloadPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $downloadChecksumPath = "$downloadPath.sha256"
+    $downloadChecksumLine = "$downloadHash  $downloadName`n"
+    [System.IO.File]::WriteAllText($downloadChecksumPath, $downloadChecksumLine, [System.Text.UTF8Encoding]::new($false))
+}
+
 foreach ($outputPath in @($zipPath, $checksumPath)) {
     if (Test-Path -LiteralPath $outputPath) {
         Remove-Item -LiteralPath $outputPath -Force
@@ -129,3 +221,4 @@ $fileCount = @(Get-ChildItem -LiteralPath $stageDirectory -Recurse -File).Count
 Write-Host "Created $zipPath"
 Write-Host "SHA-256 $hash"
 Write-Host "Packaged $fileCount files ($([math]::Round($archiveSize / 1MB, 2)) MiB compressed)."
+Write-Host "Created Velopack installer, portable package, update feed, and full update package in $velopackDirectory"

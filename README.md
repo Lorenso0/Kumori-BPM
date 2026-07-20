@@ -32,16 +32,24 @@ Kumori is an unranked custom client:
 - Official score submission is disabled for the entire build.
 - BPM Adjust is unavailable in multiplayer.
 - Login, chat, beatmap browsing, downloads, and leaderboards remain enabled.
-- Self-updates are disabled. Install new Kumori versions manually.
+- Installer and Velopack portable builds update from Kumori's GitHub releases.
 
 ## Installing
 
-Download the Windows x64 ZIP from the repository's GitHub Releases page,
-verify its accompanying SHA-256 checksum, and extract it into a new directory.
-Run `osu!.exe` from that directory.
+Download `KumoriBPM-win-Setup.exe` from the repository's GitHub Releases page.
+The per-user installer creates a separate Kumori application directory and does
+not require administrator access. Once installed, Kumori checks for releases in
+the background, downloads updates, and offers to restart when they are ready.
 
-The release is portable and unsigned, so Windows SmartScreen may display a
-warning. No registry entries or administrator privileges are required.
+Existing users of releases older than `2026.711.0-kumori.3` must install this
+version manually once. Automatic updates work for subsequent releases.
+
+For a self-contained alternative, download and extract
+`KumoriBPM-win-Portable.zip`, then run `Kumori BPM.exe`. This package also
+self-updates. The versioned `kumori-osu-*-win-x64.zip` remains available as a
+legacy manual-update archive.
+
+The releases are unsigned, so Windows SmartScreen may display a warning.
 
 By default Kumori uses lazer's normal `osu` data profile. Do not run official
 lazer and Kumori simultaneously, and back up the lazer data directory before
@@ -50,7 +58,7 @@ switching between substantially different client versions.
 For an isolated profile:
 
 ```powershell
-& ".\osu!.exe" --bpm-isolated
+& ".\Kumori BPM.exe" --bpm-isolated
 ```
 
 ## Building
@@ -67,10 +75,13 @@ dotnet test osu.Game.Rulesets.Osu.Tests/osu.Game.Rulesets.Osu.Tests.csproj -c Re
 To create the audited Windows release ZIP and checksum:
 
 ```powershell
+dotnet tool restore
 .\scripts\Publish-Release.ps1
 ```
 
-Generated files are written below `artifacts/releases/`.
+Generated files are written below `artifacts/releases/`. The release script
+also creates the Velopack installer, self-updating portable package, update
+feed, and full/delta update packages.
 
 ## Maintaining the fork
 

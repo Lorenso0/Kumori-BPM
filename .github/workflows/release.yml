@@ -54,6 +54,9 @@ jobs:
             **/*.props
             global.json
 
+      - name: Restore pinned build tools
+        run: dotnet tool restore
+
       - name: Restore
         run: |
           dotnet restore osu.Desktop.slnf
@@ -74,9 +77,41 @@ jobs:
           -c Release --no-build
           --filter "FullyQualifiedName~ModBPMAdjust"
 
+      - name: Restore previous updater package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $repository = "https://github.com/${{ github.repository }}"
+          $assetNames = @(gh api "repos/${{ github.repository }}/releases/latest" --jq '.assets[].name')
+
+          if ($assetNames -contains 'releases.win.json') {
+            dotnet tool run vpk -- --skip-updates download github `
+              --outputDir artifacts/velopack-base `
+              --channel win `
+              --repoUrl $repository `
+              --token $env:GH_TOKEN
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to restore the previous Velopack release."
+            }
+          } else {
+            Write-Host "The previous release has no Velopack feed; building the bootstrap updater release without a delta."
+          }
+
       - name: Publish and audit
         shell: pwsh
-        run: ./scripts/Publish-Release.ps1 -ReleaseVersion $env:KUMORI_RELEASE_VERSION -NoRestore
+        run: |
+          $arguments = @{
+            ReleaseVersion = $env:KUMORI_RELEASE_VERSION
+            NoRestore = $true
+          }
+
+          if (Test-Path -LiteralPath artifacts/velopack-base) {
+            $arguments.VelopackBaseDirectory = 'artifacts/velopack-base'
+          }
+
+          ./scripts/Publish-Release.ps1 @arguments
 
       - name: Create draft release
         env:
@@ -86,8 +121,23 @@ jobs:
           $version = $env:KUMORI_RELEASE_VERSION
           $zip = "artifacts/releases/kumori-osu-$version-win-x64.zip"
           $checksum = "$zip.sha256"
+          $velopack = "artifacts/releases/_work-$version/velopack"
+          $velopackAssets = @(
+            "$velopack/KumoriBPM-win-Setup.exe",
+            "$velopack/KumoriBPM-win-Setup.exe.sha256",
+            "$velopack/KumoriBPM-win-Portable.zip",
+            "$velopack/KumoriBPM-win-Portable.zip.sha256",
+            "$velopack/KumoriBPM-$version-full.nupkg",
+            "$velopack/releases.win.json",
+            "$velopack/RELEASES"
+          )
+          $delta = "$velopack/KumoriBPM-$version-delta.nupkg"
+          if (Test-Path -LiteralPath $delta) {
+            $velopackAssets += $delta
+          }
+
           $intro = Get-Content RELEASE.md -Raw
-          gh release create $version $zip $checksum `
+          gh release create $version $zip $checksum @velopackAssets `
             --draft `
             --generate-notes `
             --verify-tag `

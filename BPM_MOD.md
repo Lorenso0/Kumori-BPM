@@ -61,7 +61,7 @@ The BPM build hides non-practice visual/physics gimmick mods from the mod select
 For isolated testing, launch with `--bpm-isolated`. This uses a separate `osu-bpm` profile and IPC pipe:
 
 ```powershell
-& ".\osu!.exe" --bpm-isolated
+& ".\Kumori BPM.exe" --bpm-isolated
 ```
 
 ## Build
@@ -70,17 +70,18 @@ The required .NET 8 SDK is selected by `global.json`.
 
 ```powershell
 dotnet restore osu.Desktop.slnf
+dotnet tool restore
 dotnet build osu.Desktop.slnf -c Release
 dotnet test osu.Game.Tests/osu.Game.Tests.csproj -c Release --filter "FullyQualifiedName~ModBPMAdjust|FullyQualifiedName~BPMCustomBuildPolicy"
 dotnet test osu.Game.Rulesets.Osu.Tests/osu.Game.Rulesets.Osu.Tests.csproj -c Release --filter "FullyQualifiedName~ModBPMAdjust"
 .\scripts\Publish-Release.ps1
 ```
 
-The audited release ZIP and SHA-256 checksum are written to
-`artifacts/releases/`. Extract the ZIP, then run:
+The audited release artifacts are written to `artifacts/releases/`. Install with
+the generated setup executable, or extract the Velopack portable ZIP and run:
 
 ```powershell
-& ".\osu!.exe"
+& ".\Kumori BPM.exe"
 ```
 
 This is a custom client build. It cannot be installed as a mod DLL into the official osu!lazer release.
