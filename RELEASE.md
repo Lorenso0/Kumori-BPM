@@ -3,6 +3,13 @@
 This is an unofficial Windows x64 build based on osu!lazer
 `2026.711.0-lazer`.
 
+## What's new
+
+- Added Daycore, Balanced, Custom Pitch, Chipmunk, Deep, Nightcore Pitch Only,
+  and Preserve Pitch + Accents treatments to BPM Adjust.
+- Added independent Automatic, Off, Nightcore, and Metronome beat accents.
+- Existing BPM settings, local scores, replays, and presets remain compatible.
+
 ## Install
 
 1. Download `KumoriBPM-win-Setup.exe` and its `.sha256` file.

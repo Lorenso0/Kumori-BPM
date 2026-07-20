@@ -17,7 +17,9 @@ The **BPM Adjust (BPM)** mod appears in the Fun category for osu!, taiko,
 catch, and mania. It can:
 
 - Set a target BPM which is recalculated for each selected beatmap.
-- Preserve pitch, adjust pitch with speed, or use Nightcore audio.
+- Choose from pitch-preserving, speed-linked, Nightcore, Daycore, Balanced,
+  custom-semitone, Chipmunk, and Deep audio treatments.
+- Add optional Nightcore percussion or a simple metronome independently of pitch.
 - Optionally preserve the map's real-time AR and OD behavior.
 - Save reusable BPM presets.
 - Store its settings in local scores and replays.

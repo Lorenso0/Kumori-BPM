@@ -24,7 +24,19 @@ No unofficial osu! source files or third-party mod implementations are included.
    - **Preserve Pitch** changes tempo without shifting the song's pitch.
    - **Adjust Pitch** changes pitch with playback speed.
    - **Nightcore** uses lazer's fixed 1.5x pitch treatment and synced beat accents while compensating tempo to reach the target BPM.
-6. Choose whether **Scale map stats with BPM** should be enabled:
+   - **Daycore** uses lazer's fixed 0.75x pitch treatment while compensating tempo to reach the target BPM.
+   - **Balanced** splits the rate equally between pitch and tempo adjustments to reduce extreme processing artifacts.
+   - **Custom Pitch** applies the selected **Custom pitch** shift from -12 to +12 semitones and compensates tempo so the target BPM remains exact.
+   - **Chipmunk** raises pitch by one octave while compensating tempo.
+   - **Deep** lowers pitch by one octave while compensating tempo.
+   - **Nightcore Pitch Only** applies the Nightcore pitch treatment without automatically adding beat accents.
+   - **Preserve Pitch + Accents** preserves the original pitch and automatically adds Nightcore beat accents.
+6. Select a **Beat accents** mode:
+   - **Automatic** retains the audio mode's normal behavior. Nightcore and Preserve Pitch + Accents add Nightcore percussion; other modes add nothing.
+   - **Off** disables additional beat sounds.
+   - **Nightcore** adds lazer's beat-synchronised kick, clap, hat, and finish pattern with any audio mode.
+   - **Metronome** adds one click per beat with a stronger downbeat.
+7. Choose whether **Scale map stats with BPM** should be enabled:
    - **Enabled** keeps DT/HT-style rate scaling for AR and OD.
    - **Disabled** compensates rate-sensitive stats so their real-time approach and hit windows match the map's original values. Object spacing, song duration, and playback speed still follow the selected BPM.
 
@@ -36,7 +48,7 @@ Use **+ SAVE** below the target field to store a reusable BPM button. Click a sa
 
 For variable-BPM maps, lazer's most common BPM is changed to the target and every timing section is scaled proportionally.
 
-Local score panels display the saved target beside the **BPM** mod acronym (for example, `BPM 174.5`). The target, audio mode, map-stat scaling toggle, and explicit neutral/cleared state are retained in local score, replay, and Personal Preset mod settings.
+Local score panels display the saved target beside the **BPM** mod acronym (for example, `BPM 174.5`). The target, audio mode, custom pitch, beat accents, map-stat scaling toggle, and explicit neutral/cleared state are retained in local score, replay, and Personal Preset mod settings.
 
 ## Safety and online play
 

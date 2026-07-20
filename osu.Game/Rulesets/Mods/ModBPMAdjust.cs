@@ -20,6 +20,9 @@ namespace osu.Game.Rulesets.Mods
     public abstract class ModBPMAdjust : ModRateAdjust, IApplicableToBeatmapInfo, IApplicableToBeatmapBeforeConversion
     {
         private const double nightcore_pitch_adjust = 1.5;
+        private const double daycore_pitch_adjust = 0.75;
+        private const double chipmunk_pitch_adjust = 2;
+        private const double deep_pitch_adjust = 0.5;
         private const double minimum_supported_tempo = 0.05;
         private const double experimental_upper_rate = 4;
 
@@ -39,8 +42,19 @@ namespace osu.Game.Rulesets.Mods
         [SettingSource("Target BPM", "The primary BPM to play the selected map at", SettingControlType = typeof(SettingsBPMNumberBox))]
         public Bindable<double?> TargetBPM { get; } = new Bindable<double?>();
 
-        [SettingSource("Audio mode", "Choose how pitch and Nightcore beat accents respond to the BPM change")]
+        [SettingSource("Audio mode", "Choose how pitch responds to the BPM change")]
         public Bindable<BPMAdjustAudioMode> AudioMode { get; } = new Bindable<BPMAdjustAudioMode>(BPMAdjustAudioMode.PreservePitch);
+
+        [SettingSource("Custom pitch", "Pitch shift in semitones used by the Custom Pitch audio mode")]
+        public BindableNumber<double> CustomPitchSemitones { get; } = new BindableDouble
+        {
+            MinValue = -12,
+            MaxValue = 12,
+            Precision = 0.1,
+        };
+
+        [SettingSource("Beat accents", "Add beat-synchronised percussion independently of the pitch mode")]
+        public Bindable<BPMAdjustBeatAccentMode> BeatAccents { get; } = new Bindable<BPMAdjustBeatAccentMode>(BPMAdjustBeatAccentMode.Automatic);
 
         [SettingSource("Scale map stats with BPM", "Scale rate-sensitive map stats such as AR and OD, like Double Time and Half Time")]
         public BindableBool ScaleMapStatsWithBPM { get; } = new BindableBool(true);
@@ -75,6 +89,7 @@ namespace osu.Game.Rulesets.Mods
             });
             SpeedChange.BindValueChanged(_ => updateAudioAdjustments());
             AudioMode.BindValueChanged(_ => updateAudioAdjustments(), true);
+            CustomPitchSemitones.BindValueChanged(_ => updateAudioAdjustments());
         }
 
         public void ApplyToBeatmapInfo(IBeatmapInfo beatmapInfo)
@@ -113,7 +128,13 @@ namespace osu.Game.Rulesets.Mods
                 yield return ("Speed change", FormattableString.Invariant($"{SpeedChange.Value:0.####}x"));
 
                 if (!AudioMode.IsDefault)
-                    yield return ("Audio mode", AudioMode.Value.ToString());
+                    yield return ("Audio mode", getAudioModeName(AudioMode.Value));
+
+                if (AudioMode.Value == BPMAdjustAudioMode.CustomPitch)
+                    yield return ("Pitch shift", FormattableString.Invariant($"{CustomPitchSemitones.Value:+0.#;-0.#;0} semitones"));
+
+                if (!BeatAccents.IsDefault)
+                    yield return ("Beat accents", BeatAccents.Value.ToString());
 
                 if (!ScaleMapStatsWithBPM.Value)
                     yield return ("Map stats", "Unscaled");
@@ -173,6 +194,7 @@ namespace osu.Game.Rulesets.Mods
             switch (AudioMode.Value)
             {
                 case BPMAdjustAudioMode.PreservePitch:
+                case BPMAdjustAudioMode.PreservePitchWithAccents:
                     frequency = 1;
                     tempo = SpeedChange.Value;
                     break;
@@ -183,8 +205,34 @@ namespace osu.Game.Rulesets.Mods
                     break;
 
                 case BPMAdjustAudioMode.Nightcore:
+                case BPMAdjustAudioMode.NightcorePitchOnly:
                     frequency = nightcore_pitch_adjust;
                     tempo = SpeedChange.Value / nightcore_pitch_adjust;
+                    break;
+
+                case BPMAdjustAudioMode.Daycore:
+                    frequency = daycore_pitch_adjust;
+                    tempo = SpeedChange.Value / daycore_pitch_adjust;
+                    break;
+
+                case BPMAdjustAudioMode.Balanced:
+                    frequency = Math.Sqrt(SpeedChange.Value);
+                    tempo = frequency;
+                    break;
+
+                case BPMAdjustAudioMode.CustomPitch:
+                    frequency = Math.Pow(2, CustomPitchSemitones.Value / 12);
+                    tempo = SpeedChange.Value / frequency;
+                    break;
+
+                case BPMAdjustAudioMode.Chipmunk:
+                    frequency = chipmunk_pitch_adjust;
+                    tempo = SpeedChange.Value / chipmunk_pitch_adjust;
+                    break;
+
+                case BPMAdjustAudioMode.Deep:
+                    frequency = deep_pitch_adjust;
+                    tempo = SpeedChange.Value / deep_pitch_adjust;
                     break;
 
                 default:
@@ -203,6 +251,45 @@ namespace osu.Game.Rulesets.Mods
 
             frequencyAdjust.Value = frequency;
             tempoAdjust.Value = tempo;
+        }
+
+        private static string getAudioModeName(BPMAdjustAudioMode mode)
+        {
+            switch (mode)
+            {
+                case BPMAdjustAudioMode.PreservePitch:
+                    return "Preserve Pitch";
+
+                case BPMAdjustAudioMode.AdjustPitch:
+                    return "Adjust Pitch";
+
+                case BPMAdjustAudioMode.Nightcore:
+                    return "Nightcore";
+
+                case BPMAdjustAudioMode.Daycore:
+                    return "Daycore";
+
+                case BPMAdjustAudioMode.Balanced:
+                    return "Balanced";
+
+                case BPMAdjustAudioMode.CustomPitch:
+                    return "Custom Pitch";
+
+                case BPMAdjustAudioMode.Chipmunk:
+                    return "Chipmunk";
+
+                case BPMAdjustAudioMode.Deep:
+                    return "Deep";
+
+                case BPMAdjustAudioMode.NightcorePitchOnly:
+                    return "Nightcore Pitch Only";
+
+                case BPMAdjustAudioMode.PreservePitchWithAccents:
+                    return "Preserve Pitch + Accents";
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
+            }
         }
 
         public override void ResetSettingsToDefaults()
@@ -235,11 +322,33 @@ namespace osu.Game.Rulesets.Mods
     {
         public void ApplyToDrawableRuleset(DrawableRuleset<TObject> drawableRuleset)
         {
-            if (AudioMode.Value != BPMAdjustAudioMode.Nightcore)
-                return;
+            BPMAdjustBeatAccentMode accentMode = BeatAccents.Value;
 
-            bool playHats = Precision.AlmostEquals(drawableRuleset.Beatmap.Difficulty.SliderTickRate % 2, 0);
-            drawableRuleset.Overlays.Add(new ModNightcore<TObject>.NightcoreBeatContainer(playHats));
+            if (accentMode == BPMAdjustBeatAccentMode.Automatic)
+            {
+                accentMode = AudioMode.Value == BPMAdjustAudioMode.Nightcore
+                             || AudioMode.Value == BPMAdjustAudioMode.PreservePitchWithAccents
+                    ? BPMAdjustBeatAccentMode.Nightcore
+                    : BPMAdjustBeatAccentMode.Off;
+            }
+
+            switch (accentMode)
+            {
+                case BPMAdjustBeatAccentMode.Off:
+                    return;
+
+                case BPMAdjustBeatAccentMode.Nightcore:
+                    bool playHats = Precision.AlmostEquals(drawableRuleset.Beatmap.Difficulty.SliderTickRate % 2, 0);
+                    drawableRuleset.Overlays.Add(new ModNightcore<TObject>.NightcoreBeatContainer(playHats));
+                    return;
+
+                case BPMAdjustBeatAccentMode.Metronome:
+                    drawableRuleset.Overlays.Add(new BPMMetronomeBeatContainer());
+                    return;
+
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
     }
 
@@ -248,5 +357,20 @@ namespace osu.Game.Rulesets.Mods
         PreservePitch,
         AdjustPitch,
         Nightcore,
+        Daycore,
+        Balanced,
+        CustomPitch,
+        Chipmunk,
+        Deep,
+        NightcorePitchOnly,
+        PreservePitchWithAccents,
+    }
+
+    public enum BPMAdjustBeatAccentMode
+    {
+        Automatic,
+        Off,
+        Nightcore,
+        Metronome,
     }
 }

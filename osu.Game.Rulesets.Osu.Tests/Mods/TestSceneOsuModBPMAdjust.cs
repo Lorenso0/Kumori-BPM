@@ -34,21 +34,32 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
             });
         }
 
-        [TestCase(BPMAdjustAudioMode.PreservePitch, false)]
-        [TestCase(BPMAdjustAudioMode.AdjustPitch, false)]
-        [TestCase(BPMAdjustAudioMode.Nightcore, true)]
-        public void TestNightcoreBeatContainerOnlyAddedForNightcore(BPMAdjustAudioMode audioMode, bool shouldAddBeatContainer)
+        [TestCase(BPMAdjustAudioMode.PreservePitch, BPMAdjustBeatAccentMode.Automatic, false, false)]
+        [TestCase(BPMAdjustAudioMode.AdjustPitch, BPMAdjustBeatAccentMode.Automatic, false, false)]
+        [TestCase(BPMAdjustAudioMode.Nightcore, BPMAdjustBeatAccentMode.Automatic, true, false)]
+        [TestCase(BPMAdjustAudioMode.NightcorePitchOnly, BPMAdjustBeatAccentMode.Automatic, false, false)]
+        [TestCase(BPMAdjustAudioMode.PreservePitchWithAccents, BPMAdjustBeatAccentMode.Automatic, true, false)]
+        [TestCase(BPMAdjustAudioMode.PreservePitch, BPMAdjustBeatAccentMode.Nightcore, true, false)]
+        [TestCase(BPMAdjustAudioMode.Nightcore, BPMAdjustBeatAccentMode.Off, false, false)]
+        [TestCase(BPMAdjustAudioMode.PreservePitch, BPMAdjustBeatAccentMode.Metronome, false, true)]
+        public void TestBeatAccentContainers(
+            BPMAdjustAudioMode audioMode,
+            BPMAdjustBeatAccentMode accentMode,
+            bool shouldAddNightcore,
+            bool shouldAddMetronome)
         {
             var mod = new OsuModBPMAdjust
             {
-                AudioMode = { Value = audioMode }
+                AudioMode = { Value = audioMode },
+                BeatAccents = { Value = accentMode }
             };
 
             CreateModTest(new ModTestData
             {
                 Mod = mod,
                 PassCondition = () => Player.ScoreProcessor.JudgedHits >= 2
-                                      && this.ChildrenOfType<ModNightcore<OsuHitObject>.NightcoreBeatContainer>().Any() == shouldAddBeatContainer
+                                      && this.ChildrenOfType<ModNightcore<OsuHitObject>.NightcoreBeatContainer>().Any() == shouldAddNightcore
+                                      && this.ChildrenOfType<BPMMetronomeBeatContainer>().Any() == shouldAddMetronome
             });
         }
     }
