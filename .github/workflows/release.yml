@@ -1,12 +1,21 @@
 name: Kumori Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Existing Kumori tag to build and release
+        required: true
+        type: string
   push:
     tags:
       - '20*.*.*-kumori.*'
 
 permissions:
   contents: write
+
+env:
+  KUMORI_RELEASE_VERSION: ${{ inputs.release_version || github.ref_name }}
 
 jobs:
   release:
@@ -21,7 +30,7 @@ jobs:
       - name: Validate release tag
         shell: pwsh
         run: |
-          $tag = '${{ github.ref_name }}'
+          $tag = $env:KUMORI_RELEASE_VERSION
           if ($tag -notmatch '^\d{4}\.\d+\.\d+-kumori\.\d+$') {
             throw "Invalid Kumori release tag: $tag"
           }
@@ -67,14 +76,14 @@ jobs:
 
       - name: Publish and audit
         shell: pwsh
-        run: ./scripts/Publish-Release.ps1 -ReleaseVersion '${{ github.ref_name }}' -NoRestore
+        run: ./scripts/Publish-Release.ps1 -ReleaseVersion $env:KUMORI_RELEASE_VERSION -NoRestore
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $version = '${{ github.ref_name }}'
+          $version = $env:KUMORI_RELEASE_VERSION
           $zip = "artifacts/releases/kumori-osu-$version-win-x64.zip"
           $checksum = "$zip.sha256"
           $intro = Get-Content RELEASE.md -Raw
