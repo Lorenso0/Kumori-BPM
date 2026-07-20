@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -113,16 +114,19 @@ namespace osu.Game.Tests.Visual.SongSelect
             OsuModDoubleTime doubleTime = null!;
 
             selectBeatmap(beatmap);
-            checkDisplayedBPM($"{bpm}");
+            checkDisplayedBPM($"{bpm}", BeatmapTitleWedge.Statistic.StatisticAdjustment.None);
 
             AddStep("select DT", () => SelectedMods.Value = new[] { doubleTime = new OsuModDoubleTime() });
-            checkDisplayedBPM($"{bpm * 1.5f}");
+            checkDisplayedBPM($"{bpm * 1.5f}", BeatmapTitleWedge.Statistic.StatisticAdjustment.Increase, $"{bpm}", 1.5);
 
             AddStep("change DT rate", () => doubleTime.SpeedChange.Value = 2);
-            checkDisplayedBPM($"{bpm * 2}");
+            checkDisplayedBPM($"{bpm * 2}", BeatmapTitleWedge.Statistic.StatisticAdjustment.Increase, $"{bpm}", 2);
+
+            AddStep("change DT rate to 1.24x", () => doubleTime.SpeedChange.Value = 1.24);
+            checkDisplayedBPM("149", BeatmapTitleWedge.Statistic.StatisticAdjustment.Increase, $"{bpm}", 1.24);
 
             AddStep("select HT", () => SelectedMods.Value = new[] { new OsuModHalfTime() });
-            checkDisplayedBPM($"{bpm * 0.75f}");
+            checkDisplayedBPM($"{bpm * 0.75f}", BeatmapTitleWedge.Statistic.StatisticAdjustment.Decrease, $"{bpm}", 0.75);
         }
 
         [Test]
@@ -289,13 +293,36 @@ namespace osu.Game.Tests.Visual.SongSelect
             });
         }
 
-        private void checkDisplayedBPM(string target)
+        private void checkDisplayedBPM(
+            string target,
+            BeatmapTitleWedge.Statistic.StatisticAdjustment? adjustment = null,
+            string? original = null,
+            double? rate = null)
         {
             AddUntilStep($"displayed bpm is {target}", () =>
             {
-                var label = titleWedge.ChildrenOfType<BeatmapTitleWedge.Statistic>().Single(l => l.TooltipText == BeatmapsetsStrings.ShowStatsBpm);
-                return label.Text.ToString() == target;
+                return titleWedge.ChildrenOfType<BeatmapTitleWedge.Statistic>().Any(l => l.Text?.ToString() == target);
             });
+
+            if (adjustment != null)
+            {
+                AddAssert($"BPM adjustment is {adjustment}", () =>
+                {
+                    var label = titleWedge.ChildrenOfType<BeatmapTitleWedge.Statistic>().Single(l => l.Text?.ToString() == target);
+                    return label.Adjustment == adjustment;
+                });
+            }
+
+            if (original != null && rate != null)
+            {
+                string expectedRate = rate.Value.ToString("0.##", CultureInfo.InvariantCulture);
+
+                AddAssert($"BPM hover shows {rate:0.##}x rate and original {original}", () =>
+                {
+                    var label = titleWedge.ChildrenOfType<BeatmapTitleWedge.Statistic>().Single(l => l.Text?.ToString() == target);
+                    return label.TooltipText.ToString();
+                }, () => Is.EqualTo($"Mods change the play rate to {expectedRate}×, adjusting BPM from {original} to {target}."));
+            }
         }
 
         private (WorkingBeatmap, Screens.Select.SongSelect.BeatmapSetLookupResult) createTestBeatmap()

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
+using osu.Framework.Extensions.LocalisationExtensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Localisation;
@@ -264,9 +265,15 @@ namespace osu.Game.Screens.Select
 
                 double rate = ModUtils.CalculateRateWithMods(mods.Value);
 
+                int originalBpmMax = FormatUtils.RoundBPM(beatmap.ControlPointInfo.BPMMaximum);
+                int originalBpmMin = FormatUtils.RoundBPM(beatmap.ControlPointInfo.BPMMinimum);
+                int originalMostCommonBPM = FormatUtils.RoundBPM(60000 / beatmap.GetMostCommonBeatLength());
                 int bpmMax = FormatUtils.RoundBPM(beatmap.ControlPointInfo.BPMMaximum, rate);
                 int bpmMin = FormatUtils.RoundBPM(beatmap.ControlPointInfo.BPMMinimum, rate);
                 int mostCommonBPM = FormatUtils.RoundBPM(60000 / beatmap.GetMostCommonBeatLength(), rate);
+
+                LocalisableString originalBpmText = formatBpm(originalBpmMin, originalBpmMax, originalMostCommonBPM);
+                LocalisableString bpmText = formatBpm(bpmMin, bpmMax, mostCommonBPM);
 
                 double drainLength = Math.Round(beatmap.CalculateDrainLength() / rate);
                 double hitLength = Math.Round(beatmapInfo.Length / rate);
@@ -279,12 +286,27 @@ namespace osu.Game.Screens.Select
                     lengthStatistic.Text = hitLength.ToFormattedDuration();
                     lengthStatistic.TooltipText = BeatmapsetsStrings.ShowStatsTotalLength(drainLength.ToFormattedDuration());
 
-                    bpmStatistic.Text = bpmMin == bpmMax
-                        ? $"{bpmMin}"
-                        : LocalisableString.Interpolate($"{bpmMin}-{bpmMax} ({SongSelectStrings.MostlyBPM(mostCommonBPM)})");
+                    bpmStatistic.Text = bpmText;
+
+                    if (rate > 1)
+                        bpmStatistic.Adjustment = Statistic.StatisticAdjustment.Increase;
+                    else if (rate < 1)
+                        bpmStatistic.Adjustment = Statistic.StatisticAdjustment.Decrease;
+                    else
+                        bpmStatistic.Adjustment = Statistic.StatisticAdjustment.None;
+
+                    bpmStatistic.TooltipText = rate == 1
+                        ? BeatmapsetsStrings.ShowStatsBpm
+                        : LocalisableString.Interpolate(
+                            $"Mods change the play rate to {((float)rate).ToLocalisableString("0.##")}×, adjusting BPM from {originalBpmText} to {bpmText}.");
                 });
             }, token);
         }
+
+        private static LocalisableString formatBpm(int bpmMin, int bpmMax, int mostCommonBPM) =>
+            bpmMin == bpmMax
+                ? $"{bpmMin}"
+                : LocalisableString.Interpolate($"{bpmMin}-{bpmMax} ({SongSelectStrings.MostlyBPM(mostCommonBPM)})");
 
         private CancellationTokenSource? onlineDisplayCancellationSource;
 

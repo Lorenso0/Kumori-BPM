@@ -27,9 +27,11 @@ namespace osu.Game.Screens.Select
             private readonly float? minSize;
 
             private OsuSpriteText valueText = null!;
+            private SpriteIcon adjustmentIcon = null!;
             private LoadingSpinner loading = null!;
 
             private LocalisableString? text;
+            private StatisticAdjustment adjustment;
 
             public LocalisableString? Text
             {
@@ -43,6 +45,22 @@ namespace osu.Game.Screens.Select
 
             public LocalisableString TooltipText { get; set; }
 
+            public StatisticAdjustment Adjustment
+            {
+                get => adjustment;
+                set
+                {
+                    adjustment = value;
+                    Scheduler.AddOnce(updateDisplay);
+                }
+            }
+
+            [Resolved]
+            private OsuColour colours { get; set; } = null!;
+
+            [Resolved]
+            private OverlayColourProvider colourProvider { get; set; } = null!;
+
             public Statistic(IconUsage icon, bool background = false, float leftPadding = 10f, float? minSize = null)
             {
                 this.icon = icon;
@@ -54,7 +72,7 @@ namespace osu.Game.Screens.Select
             }
 
             [BackgroundDependencyLoader]
-            private void load(OverlayColourProvider colourProvider)
+            private void load()
             {
                 Masking = true;
                 CornerRadius = 5;
@@ -116,14 +134,36 @@ namespace osu.Game.Screens.Select
                                         {
                                             new[]
                                             {
-                                                valueText = new OsuSpriteText
+                                                new FillFlowContainer
                                                 {
                                                     Anchor = Anchor.Centre,
                                                     Origin = Anchor.Centre,
-                                                    Font = OsuFont.Style.Heading2,
-                                                    Colour = colourProvider.Content2,
-                                                    Margin = new MarginPadding { Bottom = 2f },
-                                                    AlwaysPresent = true,
+                                                    AutoSizeAxes = Axes.Both,
+                                                    Direction = FillDirection.Horizontal,
+                                                    Children = new Drawable[]
+                                                    {
+                                                        valueText = new OsuSpriteText
+                                                        {
+                                                            Anchor = Anchor.CentreLeft,
+                                                            Origin = Anchor.CentreLeft,
+                                                            Font = OsuFont.Style.Heading2,
+                                                            Colour = colourProvider.Content2,
+                                                            Margin = new MarginPadding { Bottom = 2f },
+                                                            AlwaysPresent = true,
+                                                        },
+                                                        adjustmentIcon = new SpriteIcon
+                                                        {
+                                                            Anchor = Anchor.CentreLeft,
+                                                            Origin = Anchor.CentreLeft,
+                                                            Margin = new MarginPadding
+                                                            {
+                                                                Top = -4f,
+                                                                Left = 2,
+                                                            },
+                                                            Size = new Vector2(8),
+                                                            Alpha = 0,
+                                                        },
+                                                    },
                                                 },
                                             }
                                         }
@@ -149,9 +189,41 @@ namespace osu.Game.Screens.Select
                 {
                     valueText.Text = text.Value;
                     valueText.FadeIn(120, Easing.OutQuint);
+
+                    switch (adjustment)
+                    {
+                        case StatisticAdjustment.Increase:
+                            valueText.FadeColour(colours.Red1, 300, Easing.OutQuint);
+                            adjustmentIcon.Icon = FontAwesome.Solid.SortUp;
+                            adjustmentIcon.Colour = colours.Red1;
+                            adjustmentIcon.Show();
+                            break;
+
+                        case StatisticAdjustment.Decrease:
+                            valueText.FadeColour(colours.Lime1, 300, Easing.OutQuint);
+                            adjustmentIcon.Icon = FontAwesome.Solid.SortDown;
+                            adjustmentIcon.Colour = colours.Lime1;
+                            adjustmentIcon.Show();
+                            break;
+
+                        default:
+                            valueText.FadeColour(colourProvider.Content2, 300, Easing.OutQuint);
+                            adjustmentIcon.Hide();
+                            break;
+                    }
                 }
                 else
+                {
                     valueText.FadeOut(120, Easing.OutQuint);
+                    adjustmentIcon.Hide();
+                }
+            }
+
+            public enum StatisticAdjustment
+            {
+                None,
+                Increase,
+                Decrease,
             }
         }
     }
