@@ -40,6 +40,7 @@ namespace osu.Game.Customisation
         public const string ISOLATED_PROFILE_ARGUMENT = "--bpm-isolated";
         public const string ISOLATED_GAME_NAME = "osu-bpm";
 
+        public static bool SelfUpdatesEnabled => false;
         public static bool OnlineChatEnabled => true;
         public static bool OnlineBeatmapAccessEnabled => true;
         public static bool ScoreSubmissionEnabled => false;

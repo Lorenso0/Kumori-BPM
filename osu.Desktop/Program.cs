@@ -189,6 +189,12 @@ namespace osu.Desktop
 
         private static void setupVelopack(string[] args)
         {
+            if (!BPMCustomBuildPolicy.SelfUpdatesEnabled)
+            {
+                Logger.Log("Self-updates are disabled for this custom build. Skipping Velopack setup.");
+                return;
+            }
+
             // Arguments being present indicate the user is either starting the game in a special (aka tournament) mode,
             // or is running with pending imports via file association or otherwise.
             //

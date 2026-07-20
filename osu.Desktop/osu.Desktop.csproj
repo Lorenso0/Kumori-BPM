@@ -5,10 +5,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Description>A free-to-win rhythm game. Rhythm is just a *click* away!</Description>
     <AssemblyName>osu!</AssemblyName>
-    <AssemblyTitle>osu!(lazer)</AssemblyTitle>
-    <Title>osu!</Title>
-    <Product>osu!(lazer)</Product>
-    <ApplicationIcon>lazer.ico</ApplicationIcon>
+    <AssemblyTitle>Kumori</AssemblyTitle>
+    <Title>Kumori</Title>
+    <Product>Kumori</Product>
+    <ApplicationIcon>kumori.ico</ApplicationIcon>
     <!-- Keep the custom executable on the exact public lazer version used by
          external integrations such as tosu. Source is pinned to the matching tag. -->
     <Version>2026.711.0-lazer</Version>
@@ -32,7 +32,7 @@
     <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
   <ItemGroup Label="Resources">
-    <EmbeddedResource Include="lazer.ico" />
+    <EmbeddedResource Include="kumori.ico" />
   </ItemGroup>
   <ItemGroup Label="Windows Icons">
     <Content Include="*.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

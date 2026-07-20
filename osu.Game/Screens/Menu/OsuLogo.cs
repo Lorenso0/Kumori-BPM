@@ -56,6 +56,8 @@ namespace osu.Game.Screens.Menu
 
         protected virtual MenuLogoVisualisation CreateMenuLogoVisualisation() => new MenuLogoVisualisation();
 
+        protected virtual string LogoTextureName => @"Menu/logo";
+
         protected virtual double BeatSampleVariance => 0.1;
 
         protected Sample SampleBeat;
@@ -282,8 +284,8 @@ namespace osu.Game.Screens.Menu
             SampleBeat = audio.Samples.Get(@"Menu/osu-logo-heartbeat");
             SampleDownbeat = audio.Samples.Get(@"Menu/osu-logo-downbeat");
 
-            logo.Texture = textures.Get(@"Menu/logo");
-            ripple.Texture = textures.Get(@"Menu/logo");
+            logo.Texture = textures.Get(LogoTextureName);
+            ripple.Texture = textures.Get(LogoTextureName);
         }
 
         private int lastBeatIndex;

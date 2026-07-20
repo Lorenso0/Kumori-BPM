@@ -38,6 +38,7 @@ using osu.Framework.Utils;
 using osu.Game.Beatmaps;
 using osu.Game.Collections;
 using osu.Game.Configuration;
+using osu.Game.Customisation;
 using osu.Game.Database;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
@@ -412,9 +413,9 @@ namespace osu.Game
             sentryLogger.AttachUser(API.LocalUser);
 
             if (SeasonalUIConfig.ENABLED)
-                dependencies.CacheAs(osuLogo = new OsuLogoChristmas { Alpha = 0 });
+                dependencies.CacheAs(osuLogo = new KumoriLogoChristmas { Alpha = 0 });
             else
-                dependencies.CacheAs(osuLogo = new OsuLogo { Alpha = 0 });
+                dependencies.CacheAs(osuLogo = new KumoriLogo { Alpha = 0 });
 
             // bind config int to database RulesetInfo
             configRuleset = LocalConfig.GetBindable<string>(OsuSetting.Ruleset);

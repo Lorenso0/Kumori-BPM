@@ -276,6 +276,7 @@ namespace osu.Game
                 VersionHash = $"{Version}-{RuntimeInfo.OS}".ComputeMD5Hash();
             }
 
+            Resources.AddStore(new DllResourceStore(typeof(OsuGameBase).Assembly));
             Resources.AddStore(new DllResourceStore(OsuResources.ResourceAssembly));
 
             dependencies.Cache(realm = new RealmAccess(Storage, CLIENT_DATABASE_FILENAME, Host.UpdateThread));

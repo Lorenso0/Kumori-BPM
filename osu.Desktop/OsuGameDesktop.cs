@@ -14,6 +14,7 @@ using osu.Game;
 using osu.Desktop.Updater;
 using osu.Framework;
 using osu.Framework.Logging;
+using osu.Game.Customisation;
 using osu.Game.Updater;
 using osu.Desktop.MacOS;
 using osu.Desktop.Windows;
@@ -109,6 +110,9 @@ namespace osu.Desktop
 
         protected override UpdateManager CreateUpdateManager()
         {
+            if (!BPMCustomBuildPolicy.SelfUpdatesEnabled)
+                return new UpdateManager();
+
             // If this is the first time we've run the game, ie it is being installed,
             // reset the user's release stream to "lazer".
             //
@@ -125,6 +129,9 @@ namespace osu.Desktop
 
         public override bool RestartAppWhenExited()
         {
+            if (!BPMCustomBuildPolicy.SelfUpdatesEnabled)
+                return false;
+
             RestartOnExitAction = () => Velopack.UpdateExe.Start(waitPid: (uint)Environment.ProcessId);
             return true;
         }
@@ -163,7 +170,7 @@ namespace osu.Desktop
             // Apple operating systems use a better icon provided via external assets.
             if (!RuntimeInfo.IsApple)
             {
-                var iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(GetType(), "lazer.ico");
+                var iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(GetType(), "kumori.ico");
                 if (iconStream != null)
                     host.Window.SetIconFromStream(iconStream);
             }
