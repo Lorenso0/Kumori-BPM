@@ -5,9 +5,10 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
-- Added Daycore, Balanced, Custom Pitch, Chipmunk, Deep, Nightcore Pitch Only,
-  and Preserve Pitch + Accents treatments to BPM Adjust.
-- Added independent Automatic, Off, Nightcore, and Metronome beat accents.
+- Fixed BPM Adjust difficulty calculations losing their selected-map playback
+  rate in the difficulty cache.
+- Star rating and rate-scaled map statistics now use the same clock-rate
+  calculation as Double Time at an equivalent speed.
 - Existing BPM settings, local scores, replays, and presets remain compatible.
 
 ## Install

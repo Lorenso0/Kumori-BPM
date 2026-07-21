@@ -301,6 +301,8 @@ namespace osu.Game.Tests.Mods
             Assert.Multiple(() =>
             {
                 Assert.That(clone.TargetBPM.Value, Is.EqualTo(174.5));
+                Assert.That(clone.SourceBPM, Is.EqualTo(128));
+                Assert.That(clone.SpeedChange.Value, Is.EqualTo(174.5 / 128).Within(1e-12));
                 Assert.That(clone.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.Nightcore));
                 Assert.That(clone.CustomPitchSemitones.Value, Is.EqualTo(3.5));
                 Assert.That(clone.BeatAccents.Value, Is.EqualTo(BPMAdjustBeatAccentMode.Metronome));

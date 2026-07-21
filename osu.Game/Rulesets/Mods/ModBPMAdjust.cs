@@ -152,6 +152,19 @@ namespace osu.Game.Rulesets.Mods
         public override string ExtendedIconInformation =>
             TargetBPM.Value == null ? string.Empty : FormattableString.Invariant($"{TargetBPM.Value.Value:0.##}");
 
+        public override Mod DeepClone()
+        {
+            var clone = (ModBPMAdjust)base.DeepClone();
+
+            // SourceBPM is derived from the selected beatmap rather than being a serialised setting.
+            // Difficulty calculation clones mods after obtaining a cached playable beatmap, so that
+            // clone cannot resolve the source BPM from the beatmap again. Preserve it here to ensure
+            // the clone retains the same clock rate as the selected mod.
+            clone.setSourceBPM(SourceBPM);
+
+            return clone;
+        }
+
         private void setSourceBPM(double bpm)
         {
             SourceBPM = BPMResolver.IsValid(bpm) ? bpm : 0;
