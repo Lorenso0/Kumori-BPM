@@ -276,6 +276,26 @@ namespace osu.Game.Tests.Mods
         }
 
         [Test]
+        public void TestDifficultyCacheLookupUsesTargetBeatmapBPM()
+        {
+            var selectedMap = new BeatmapInfo { BPM = 90 };
+            var targetMap = new BeatmapInfo { BPM = 120 };
+            var mod = new OsuModBPMAdjust { TargetBPM = { Value = 180 } };
+            mod.ApplyToBeatmapInfo(selectedMap);
+
+            var lookup = new BeatmapDifficultyCache.DifficultyCacheLookup(targetMap, new OsuRuleset().RulesetInfo, new Mod[] { mod });
+            var preparedMod = (OsuModBPMAdjust)lookup.OrderedMods.Single();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(preparedMod.SourceBPM, Is.EqualTo(120));
+                Assert.That(preparedMod.SpeedChange.Value, Is.EqualTo(1.5).Within(1e-12));
+                Assert.That(mod.SourceBPM, Is.EqualTo(90), "the selected mod must not be mutated while preparing another map");
+                Assert.That(mod.SpeedChange.Value, Is.EqualTo(2).Within(1e-12));
+            });
+        }
+
+        [Test]
         public void TestCloneResetAndSerialisation()
         {
             var original = new OsuModBPMAdjust

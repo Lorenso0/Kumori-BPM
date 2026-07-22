@@ -70,6 +70,11 @@ namespace osu.Game.Screens.Select
 
         private IBindable<APIUser> localUser = null!;
         private readonly IBindableList<int> localUserFavouriteBeatmapSets = new BindableList<int>();
+        private IBindable<BPMStarRatingFilterMode> bpmStarRatingFilterMode = null!;
+        private IBindable<string> bpmStarRatingFilterMinimum = null!;
+        private IBindable<string> bpmStarRatingFilterMaximum = null!;
+
+        private ModSettingChangeTracker? modSettingChangeTracker;
 
         public LocalisableString StatusText
         {
@@ -215,6 +220,10 @@ namespace osu.Game.Screens.Select
 
             localUser = api.LocalUser.GetBoundCopy();
             localUserFavouriteBeatmapSets.BindTo(api.LocalUserState.FavouriteBeatmapSets);
+
+            bpmStarRatingFilterMode = config.GetBindable<BPMStarRatingFilterMode>(OsuSetting.BPMStarRatingFilterMode);
+            bpmStarRatingFilterMinimum = config.GetBindable<string>(OsuSetting.BPMStarRatingFilterMinimum);
+            bpmStarRatingFilterMaximum = config.GetBindable<string>(OsuSetting.BPMStarRatingFilterMaximum);
         }
 
         protected override void LoadComplete()
@@ -229,19 +238,34 @@ namespace osu.Game.Screens.Select
             ruleset.BindValueChanged(_ => updateCriteria());
             mods.BindValueChanged(m =>
             {
+                modSettingChangeTracker?.Dispose();
+                modSettingChangeTracker = new ModSettingChangeTracker(m.NewValue);
+                modSettingChangeTracker.SettingChanged += _ =>
+                {
+                    if (currentCriteria.BPMStarRatingFilterMode == BPMStarRatingFilterMode.PostMod && currentCriteria.BPMStarRating.HasFilter)
+                        updateCriteria();
+                };
+
+                if (currentCriteria == null)
+                    return;
+
                 // The following is a note carried from old song select and may not be a valid reason anymore:
                 // // Mods are updated once by the mod select overlay when song select is entered,
                 // // regardless of if there are any mods or any changes have taken place.
                 // // Updating the criteria here so early triggers a re-ordering of panels on song select, via... some mechanism.
                 // // Todo: Investigate/fix and potentially remove this.
                 // TODO: this might be simply removable with the new song select & carousel code.
-                if (m.NewValue.SequenceEqual(m.OldValue))
+                if (m.NewValue.SequenceEqual(m.OldValue) && bpmStarRatingFilterMode.Value == BPMStarRatingFilterMode.Disabled)
                     return;
 
                 var rulesetCriteria = currentCriteria.RulesetCriteria;
-                if (rulesetCriteria?.FilterMayChangeFromMods(currentCriteria, m) == true)
+                if (bpmStarRatingFilterMode.Value != BPMStarRatingFilterMode.Disabled || rulesetCriteria?.FilterMayChangeFromMods(currentCriteria, m) == true)
                     updateCriteria();
-            });
+            }, true);
+
+            bpmStarRatingFilterMode.BindValueChanged(_ => updateCriteria());
+            bpmStarRatingFilterMinimum.BindValueChanged(_ => updateCriteria());
+            bpmStarRatingFilterMaximum.BindValueChanged(_ => updateCriteria());
 
             searchTextBox.Current.BindValueChanged(_ => updateCriteria());
 
@@ -287,6 +311,7 @@ namespace osu.Game.Screens.Select
         {
             base.Dispose(isDisposing);
             collectionsSubscription?.Dispose();
+            modSettingChangeTracker?.Dispose();
         }
 
         /// <summary>
@@ -309,6 +334,12 @@ namespace osu.Game.Screens.Select
                 LocalUserId = isValidUser ? localUser.Value.Id : null,
                 LocalUserUsername = isValidUser ? localUser.Value.Username : null,
             };
+
+            if (mods.Value.Any(mod => mod is ModBPMAdjust))
+            {
+                criteria.BPMStarRatingFilterMode = bpmStarRatingFilterMode.Value;
+                criteria.BPMStarRating = BPMStarRatingFilter.CreateRange(bpmStarRatingFilterMinimum.Value, bpmStarRatingFilterMaximum.Value);
+            }
 
             if (!difficultyRangeSlider.LowerBound.IsDefault)
                 criteria.UserStarDifficulty.Min = difficultyRangeSlider.LowerBound.Value;

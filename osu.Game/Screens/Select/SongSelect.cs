@@ -114,6 +114,9 @@ namespace osu.Game.Screens.Select
         [Cached]
         private readonly OverlayColourProvider colourProvider = new OverlayColourProvider(OverlayColourScheme.Blue);
 
+        [Cached]
+        private readonly BPMStarRatingCalculationController bpmStarRatingCalculationController = new BPMStarRatingCalculationController();
+
         private BeatmapCarousel carousel = null!;
 
         protected FilterControl FilterControl { get; private set; } = null!;

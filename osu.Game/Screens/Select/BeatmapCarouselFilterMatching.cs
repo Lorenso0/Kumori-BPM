@@ -15,27 +15,28 @@ namespace osu.Game.Screens.Select
     public class BeatmapCarouselFilterMatching : ICarouselFilter
     {
         private readonly Func<FilterCriteria> getCriteria;
+        private readonly Func<BeatmapInfo, FilterCriteria, CancellationToken, double?>? getPostModStarRating;
+        private readonly Func<bool>? isPostModFilterReady;
 
         public int BeatmapItemsCount { get; private set; }
 
-        public BeatmapCarouselFilterMatching(Func<FilterCriteria> getCriteria)
+        public BeatmapCarouselFilterMatching(Func<FilterCriteria> getCriteria, Func<BeatmapInfo, FilterCriteria, CancellationToken, double?>? getPostModStarRating = null,
+                                             Func<bool>? isPostModFilterReady = null)
         {
             this.getCriteria = getCriteria;
+            this.getPostModStarRating = getPostModStarRating;
+            this.isPostModFilterReady = isPostModFilterReady;
         }
 
-        public async Task<List<CarouselItem>> Run(IEnumerable<CarouselItem> items, CancellationToken cancellationToken) => await Task.Run(() =>
+        public Task<List<CarouselItem>> Run(IEnumerable<CarouselItem> items, CancellationToken cancellationToken) => Task.Run(() =>
         {
             var criteria = getCriteria();
-
-            return matchItems(items, criteria).ToList();
-        }, cancellationToken).ConfigureAwait(false);
-
-        private IEnumerable<CarouselItem> matchItems(IEnumerable<CarouselItem> items, FilterCriteria criteria)
-        {
-            int countMatching = 0;
+            var preliminaryMatches = new List<CarouselItem>();
 
             foreach (var item in items)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var beatmap = (BeatmapInfo)item.Model;
 
                 if (beatmap.Hidden)
@@ -44,12 +45,40 @@ namespace osu.Game.Screens.Select
                 if (!CheckCriteriaMatch(beatmap, criteria))
                     continue;
 
-                countMatching++;
-                yield return item;
+                preliminaryMatches.Add(item);
             }
 
-            BeatmapItemsCount = countMatching;
-        }
+            List<CarouselItem> matchingItems;
+
+            if (criteria.BPMStarRatingFilterMode == BPMStarRatingFilterMode.PostMod && criteria.BPMStarRating.HasFilter)
+            {
+                if (isPostModFilterReady?.Invoke() == false)
+                    return preliminaryMatches;
+
+                if (getPostModStarRating == null)
+                    return new List<CarouselItem>();
+
+                var verifiedMatches = new List<CarouselItem>();
+
+                foreach (var item in preliminaryMatches)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var beatmap = (BeatmapInfo)item.Model;
+                    double? postModRating = getPostModStarRating(beatmap, criteria, cancellationToken);
+
+                    if (postModRating != null && criteria.BPMStarRating.IsInRange(BPMStarRatingFilter.ToDisplayedRating(postModRating.Value)))
+                        verifiedMatches.Add(item);
+                }
+
+                matchingItems = verifiedMatches;
+            }
+            else
+                matchingItems = preliminaryMatches;
+
+            BeatmapItemsCount = matchingItems.Count;
+            return matchingItems;
+        }, cancellationToken);
 
         public static bool CheckCriteriaMatch(BeatmapInfo beatmap, FilterCriteria criteria)
         {
@@ -79,6 +108,9 @@ namespace osu.Game.Screens.Select
             if (!match) return false;
 
             match &= !criteria.StarDifficulty.HasFilter || criteria.StarDifficulty.IsInRange(beatmap.StarRating.FloorToDecimalDigits(2));
+            match &= criteria.BPMStarRatingFilterMode != BPMStarRatingFilterMode.PreMod
+                     || !criteria.BPMStarRating.HasFilter
+                     || criteria.BPMStarRating.IsInRange(BPMStarRatingFilter.ToDisplayedRating(beatmap.StarRating));
             match &= !criteria.ApproachRate.HasFilter || criteria.ApproachRate.IsInRange(beatmap.Difficulty.ApproachRate);
             match &= !criteria.DrainRate.HasFilter || criteria.DrainRate.IsInRange(beatmap.Difficulty.DrainRate);
             match &= !criteria.CircleSize.HasFilter || criteria.CircleSize.IsInRange(beatmap.Difficulty.CircleSize);

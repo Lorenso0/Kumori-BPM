@@ -30,6 +30,7 @@ using osu.Game.Graphics.Carousel;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Online.API;
 using osu.Game.Rulesets;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 using Realms;
 
@@ -102,7 +103,7 @@ namespace osu.Game.Screens.Select
 
             Filters = new ICarouselFilter[]
             {
-                new BeatmapCarouselFilterMatching(() => Criteria!),
+                new BeatmapCarouselFilterMatching(() => Criteria!, getPostModStarRating, () => postModFilterReady),
                 new BeatmapCarouselFilterSorting(() => Criteria!),
                 grouping = new BeatmapCarouselFilterGrouping
                 {
@@ -130,6 +131,8 @@ namespace osu.Game.Screens.Select
         {
             base.LoadComplete();
             detachedBeatmaps.BindCollectionChanged(beatmapSetsChanged, true);
+            bpmStarRatingCalculationController.CalculateRequested += calculatePostModStarRatings;
+            bpmStarRatingCalculationController.CancelRequested += cancelPostModStarRatingCalculation;
         }
 
         #region Beatmap source hookup
@@ -776,10 +779,30 @@ namespace osu.Game.Screens.Select
         public FilterCriteria? Criteria { get; private set; }
 
         private ScheduledDelegate? loadingDebounce;
+        private CancellationTokenSource? postModCalculationCancellation;
+        private IReadOnlyDictionary<Guid, double> postModFilterRatings = new Dictionary<Guid, double>();
+        private RulesetInfo? postModCalculatedRuleset;
+        private Mod[]? postModCalculatedMods;
+        private bool postModFilterReady;
+        private int latestPostModProgress;
+        private int postModProgressUpdatePending;
 
         public void Filter(FilterCriteria criteria, bool showLoadingImmediately = false)
         {
             bool resetDisplay = grouping.BeatmapSetsGroupedTogether != BeatmapCarouselFilterGrouping.ShouldGroupBeatmapsTogether(criteria);
+
+            if (postModCalculatedMods != null && !postModCalculationMatches(criteria))
+            {
+                cancelPostModStarRatingCalculation(false);
+                postModCalculatedMods = null;
+                postModCalculatedRuleset = null;
+                postModFilterRatings = new Dictionary<Guid, double>();
+                postModFilterReady = false;
+                bpmStarRatingCalculationController.Reset();
+            }
+
+            if (criteria.BPMStarRatingFilterMode != BPMStarRatingFilterMode.PostMod && postModCalculationCancellation != null)
+                cancelPostModStarRatingCalculation(false);
 
             Criteria = criteria;
 
@@ -810,7 +833,108 @@ namespace osu.Game.Screens.Select
             return base.FilterAsync(clearExistingPanels);
         }
 
+        [Resolved]
+        private BeatmapDifficultyCache difficultyCache { get; set; } = null!;
+
+        [Resolved]
+        private BPMStarRatingCalculationController bpmStarRatingCalculationController { get; set; } = null!;
+
+        private double? getPostModStarRating(BeatmapInfo beatmap, FilterCriteria criteria, CancellationToken cancellationToken) =>
+            postModFilterRatings.TryGetValue(beatmap.ID, out double rating) ? rating : null;
+
+        private bool postModCalculationMatches(FilterCriteria criteria)
+        {
+            if (postModCalculatedRuleset == null || postModCalculatedMods == null || criteria.Ruleset is not RulesetInfo ruleset)
+                return false;
+
+            return postModCalculatedRuleset.Equals(ruleset)
+                   && postModCalculatedMods.SequenceEqual(criteria.Mods ?? Array.Empty<Mod>());
+        }
+
+        private void calculatePostModStarRatings()
+        {
+            if (Criteria is not { BPMStarRatingFilterMode: BPMStarRatingFilterMode.PostMod } criteria
+                || !criteria.BPMStarRating.HasFilter
+                || criteria.Ruleset is not RulesetInfo ruleset
+                || postModCalculationCancellation != null)
+                return;
+
+            postModFilterReady = false;
+            postModFilterRatings = new Dictionary<Guid, double>();
+            postModCalculatedRuleset = ruleset;
+            postModCalculatedMods = criteria.Mods?.Select(mod => mod.DeepClone()).ToArray() ?? Array.Empty<Mod>();
+
+            // Include convertible maps regardless of the current display toggle so that changing
+            // that toggle can reuse the completed calculation instead of leaving cache gaps.
+            BeatmapInfo[] beatmaps = Items.Where(beatmap => !beatmap.Hidden && beatmap.AllowGameplayWithRuleset(ruleset, true)).ToArray();
+            var cancellation = postModCalculationCancellation = new CancellationTokenSource();
+            bpmStarRatingCalculationController.Begin(beatmaps.Length);
+
+            difficultyCache.CalculateStarRatingsForFilterAsync(beatmaps, ruleset, postModCalculatedMods, reportPostModProgress, cancellation.Token)
+                           .ContinueWith(task => Schedule(() => finishPostModCalculation(task, cancellation)), CancellationToken.None);
+        }
+
+        private void reportPostModProgress(int completed, int total)
+        {
+            Interlocked.Exchange(ref latestPostModProgress, completed);
+
+            if (Interlocked.CompareExchange(ref postModProgressUpdatePending, 1, 0) != 0)
+                return;
+
+            Schedule(() =>
+            {
+                Interlocked.Exchange(ref postModProgressUpdatePending, 0);
+                bpmStarRatingCalculationController.ReportProgress(Interlocked.CompareExchange(ref latestPostModProgress, 0, 0));
+            });
+        }
+
+        private void finishPostModCalculation(Task<IReadOnlyDictionary<Guid, double>> task, CancellationTokenSource cancellation)
+        {
+            if (!ReferenceEquals(postModCalculationCancellation, cancellation))
+            {
+                cancellation.Dispose();
+                return;
+            }
+
+            postModCalculationCancellation = null;
+            cancellation.Dispose();
+
+            if (!task.IsCompletedSuccessfully || Criteria == null || !postModCalculationMatches(Criteria))
+            {
+                bpmStarRatingCalculationController.Reset();
+                return;
+            }
+
+            postModFilterRatings = task.GetResultSafely() ?? new Dictionary<Guid, double>();
+            postModFilterReady = true;
+            bpmStarRatingCalculationController.Complete();
+            Filter(Criteria);
+        }
+
+        private void cancelPostModStarRatingCalculation() => cancelPostModStarRatingCalculation(true);
+
+        private void cancelPostModStarRatingCalculation(bool refilter)
+        {
+            var cancellation = postModCalculationCancellation;
+            postModCalculationCancellation = null;
+            cancellation?.Cancel();
+            postModFilterReady = false;
+            bpmStarRatingCalculationController.Reset();
+
+            if (refilter && Criteria != null)
+                Filter(Criteria);
+        }
+
         #endregion
+
+        protected override void Dispose(bool isDisposing)
+        {
+            bpmStarRatingCalculationController.CalculateRequested -= calculatePostModStarRatings;
+            bpmStarRatingCalculationController.CancelRequested -= cancelPostModStarRatingCalculation;
+            postModCalculationCancellation?.Cancel();
+            postModCalculationCancellation?.Dispose();
+            base.Dispose(isDisposing);
+        }
 
         #region Fetches for grouping support
 

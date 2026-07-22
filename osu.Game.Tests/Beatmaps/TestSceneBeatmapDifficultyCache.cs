@@ -141,6 +141,33 @@ namespace osu.Game.Tests.Beatmaps
         }
 
         [Test]
+        public void TestFilterStarRatingMatchesFullDifficultyCalculation()
+        {
+            Task<StarDifficulty?> fullCalculation = null;
+            Task<IReadOnlyDictionary<Guid, double>> filterCalculation = null;
+            BeatmapInfo beatmap = null;
+            Mod[] mods = null;
+
+            AddStep("queue BPM-adjusted filter difficulty", () =>
+            {
+                beatmap = importedSet.Beatmaps.First();
+                var bpm = new OsuModBPMAdjust();
+                // Simulate the selected mod still being bound to a different map. The cache must
+                // materialise a per-map clone before hashing or calculating this beatmap.
+                bpm.ApplyToBeatmapInfo(new BeatmapInfo { BPM = beatmap.BPM / 2 });
+                bpm.TargetBPM.Value = beatmap.BPM * 1.5;
+                mods = new Mod[] { bpm };
+
+                filterCalculation = actualDifficultyCache.CalculateStarRatingsForFilterAsync(new[] { beatmap }, beatmap.Ruleset, mods);
+                fullCalculation = actualDifficultyCache.GetDifficultyAsync(beatmap, beatmap.Ruleset, mods);
+            });
+            AddUntilStep("calculations complete", () => fullCalculation.IsCompletedSuccessfully && filterCalculation.IsCompletedSuccessfully);
+            AddAssert("filter rating is exact",
+                () => filterCalculation.GetResultSafely()[beatmap.ID],
+                () => Is.EqualTo(fullCalculation.GetResultSafely()!.Value.Stars).Within(0.000001));
+        }
+
+        [Test]
         public void TestStarDifficultyAdjustHashCodeConflict()
         {
             OsuModDifficultyAdjust difficultyAdjust = null;

@@ -4,10 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using osu.Framework.Bindables;
 using osu.Game.Beatmaps;
+using osu.Game.Graphics.Carousel;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Filter;
 using osu.Game.Rulesets.Mods;
@@ -147,6 +150,92 @@ namespace osu.Game.Tests.NonVisual.Filtering
             carouselItem.Filter(criteria);
             ClassicAssert.AreEqual(!inclusive, carouselItem.Filtered.Value);
         }
+
+        [TestCase(4.989, true)]
+        [TestCase(4.99, false)]
+        [TestCase(4.999, false)]
+        [TestCase(5.999, false)]
+        [TestCase(6.0, true)]
+        public void TestBPMPreModStarRatingRange(double starRating, bool filtered)
+        {
+            var beatmap = getExampleBeatmap();
+            beatmap.StarRating = starRating;
+
+            var criteria = new FilterCriteria
+            {
+                BPMStarRatingFilterMode = BPMStarRatingFilterMode.PreMod,
+                BPMStarRating = BPMStarRatingFilter.CreateRange("4.99", "5.99"),
+            };
+
+            ClassicAssert.AreEqual(!filtered, BeatmapCarouselFilterMatching.CheckCriteriaMatch(beatmap, criteria));
+        }
+
+        [TestCase("4.99", "5.99", 4.99, true)]
+        [TestCase("4,99", "5,99", 5.99, true)]
+        [TestCase("4.99", "5.99", 6.0, false)]
+        [TestCase("", "5.99", 0.0, true)]
+        [TestCase("invalid", "", 100.0, true)]
+        public void TestBPMStarRatingRangeParsing(string minimum, string maximum, double rating, bool matches)
+        {
+            var range = BPMStarRatingFilter.CreateRange(minimum, maximum);
+            ClassicAssert.AreEqual(matches, range.IsInRange(rating));
+        }
+
+        [Test]
+        public async Task TestBPMPostModStarRatingRange()
+        {
+            var criteria = new FilterCriteria
+            {
+                BPMStarRatingFilterMode = BPMStarRatingFilterMode.PostMod,
+                BPMStarRating = BPMStarRatingFilter.CreateRange("4.99", "5.99"),
+            };
+
+            var beatmaps = new[] { 3.99, 4.99, 5.999, 6.0, 20.0 }
+                           .Select(rating =>
+                           {
+                               var beatmap = getExampleBeatmap();
+                               beatmap.StarRating = rating;
+                               return beatmap;
+                           }).ToArray();
+            int calculations = 0;
+            var filter = new BeatmapCarouselFilterMatching(() => criteria, (beatmap, _, _) =>
+            {
+                calculations++;
+                // The third map looks in-range before mods, but its exact post-mod value is not.
+                return ReferenceEquals(beatmap, beatmaps[2]) ? 7.87 : beatmap.StarRating;
+            });
+
+            var result = await filter.Run(beatmaps.Select(beatmap => new CarouselItem(beatmap)), CancellationToken.None);
+
+            ClassicAssert.AreEqual(1, result.Count);
+            ClassicAssert.AreEqual(beatmaps[1], result[0].Model);
+            ClassicAssert.AreEqual(beatmaps.Length, calculations);
+            ClassicAssert.AreEqual(1, filter.BeatmapItemsCount);
+        }
+
+        [Test]
+        public async Task TestBPMPostModFilterWaitsForManualCalculation()
+        {
+            var criteria = new FilterCriteria
+            {
+                BPMStarRatingFilterMode = BPMStarRatingFilterMode.PostMod,
+                BPMStarRating = BPMStarRatingFilter.CreateRange("4", "6.5"),
+            };
+            var beatmap = getExampleBeatmap();
+            beatmap.StarRating = 20;
+            int calculations = 0;
+            var filter = new BeatmapCarouselFilterMatching(() => criteria, (_, _, _) =>
+            {
+                calculations++;
+                return 20;
+            }, () => false);
+
+            var result = await filter.Run(new[] { new CarouselItem(beatmap) }, CancellationToken.None);
+
+            ClassicAssert.AreEqual(1, result.Count);
+            ClassicAssert.AreEqual(0, calculations);
+        }
+
 
         [Test]
         [TestCase("artist", false)]

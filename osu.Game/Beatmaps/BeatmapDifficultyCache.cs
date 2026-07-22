@@ -6,8 +6,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using osu.Framework.Allocation;
 using osu.Framework.Audio.Track;
 using osu.Framework.Bindables;
@@ -15,9 +18,11 @@ using osu.Framework.Extensions;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Lists;
 using osu.Framework.Logging;
+using osu.Framework.Platform;
 using osu.Framework.Threading;
 using osu.Game.Configuration;
 using osu.Game.Database;
+using osu.Game.Online.API;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Difficulty;
 using osu.Game.Rulesets.Mods;
@@ -38,6 +43,13 @@ namespace osu.Game.Beatmaps
         // Too many simultaneous updates can lead to stutters. One thread seems to work fine for song select display purposes.
         private readonly ThreadedTaskScheduler updateScheduler = new ThreadedTaskScheduler(1, nameof(BeatmapDifficultyCache));
 
+        // Keep library filtering away from the display-update queue, while limiting it to
+        // one background worker so difficulty calculation does not make song select stutter.
+        private readonly ThreadedTaskScheduler filterScheduler = new ThreadedTaskScheduler(1, $"{nameof(BeatmapDifficultyCache)} Filter");
+        private readonly Dictionary<DifficultyCacheLookup, double> filterStarRatingCache = new Dictionary<DifficultyCacheLookup, double>();
+
+        private const string persisted_filter_cache_directory = "cache/bpm-star-ratings";
+
         /// <summary>
         /// All bindables that should be updated along with the current ruleset + mods.
         /// </summary>
@@ -57,6 +69,9 @@ namespace osu.Game.Beatmaps
 
         [Resolved]
         private BeatmapManager beatmapManager { get; set; } = null!;
+
+        [Resolved]
+        private Storage storage { get; set; } = null!;
 
         [Resolved]
         private Bindable<RulesetInfo> currentRuleset { get; set; } = null!;
@@ -106,6 +121,12 @@ namespace osu.Game.Beatmaps
         public void Invalidate(IBeatmapInfo oldBeatmap, IBeatmapInfo newBeatmap)
         {
             base.Invalidate(lookup => lookup.BeatmapInfo.Equals(oldBeatmap));
+
+            lock (filterStarRatingCache)
+            {
+                foreach (var lookup in filterStarRatingCache.Keys.Where(lookup => lookup.BeatmapInfo.Equals(oldBeatmap)).ToArray())
+                    filterStarRatingCache.Remove(lookup);
+            }
 
             lock (bindableUpdateLock)
             {
@@ -181,6 +202,166 @@ namespace osu.Game.Beatmaps
 
             return GetAsync(new DifficultyCacheLookup(localBeatmapInfo, localRulesetInfo, mods), cancellationToken, computationDelay);
         }
+
+        /// <summary>
+        /// Retrieves an already-computed difficulty without scheduling a new calculation.
+        /// </summary>
+        public bool TryGetDifficulty(IBeatmapInfo beatmapInfo, IRulesetInfo? rulesetInfo, IEnumerable<Mod>? mods, out StarDifficulty difficulty)
+        {
+            rulesetInfo ??= beatmapInfo.Ruleset;
+
+            if (beatmapInfo is BeatmapInfo localBeatmapInfo
+                && rulesetInfo is RulesetInfo localRulesetInfo
+                && CheckExists(new DifficultyCacheLookup(localBeatmapInfo, localRulesetInfo, mods), out StarDifficulty? cached)
+                && cached.HasValue)
+            {
+                difficulty = cached.Value;
+                return true;
+            }
+
+            difficulty = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Calculates exact star ratings for a complete manual song-select filter pass.
+        /// Persisted results for the same ruleset and mod settings are reused between sessions.
+        /// </summary>
+        public Task<IReadOnlyDictionary<Guid, double>> CalculateStarRatingsForFilterAsync(IReadOnlyList<BeatmapInfo> beatmaps, IRulesetInfo rulesetInfo, IEnumerable<Mod>? mods,
+                                                                                           Action<int, int>? reportProgress = null, CancellationToken cancellationToken = default)
+        {
+            Mod[] orderedMods = mods?.OrderBy(mod => mod.Acronym).Select(mod => mod.DeepClone()).ToArray() ?? Array.Empty<Mod>();
+
+            return Task.Factory.StartNew<IReadOnlyDictionary<Guid, double>>(() =>
+            {
+                Thread.CurrentThread.Priority = ThreadPriority.Highest;
+
+                string profileKey = createFilterProfileKey(rulesetInfo, orderedMods);
+                PersistedFilterStarRatings persisted = loadPersistedFilterStarRatings(profileKey);
+                var results = new Dictionary<Guid, double>(beatmaps.Count);
+                var pending = new List<(BeatmapInfo Beatmap, string PersistedKey)>();
+                int completed = 0;
+
+                foreach (BeatmapInfo beatmap in beatmaps)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    string beatmapKey = createPersistedBeatmapKey(beatmap);
+
+                    if (persisted.Ratings.TryGetValue(beatmapKey, out double persistedRating))
+                    {
+                        results[beatmap.ID] = persistedRating;
+                        reportProgress?.Invoke(++completed, beatmaps.Count);
+                        continue;
+                    }
+
+                    pending.Add((beatmap, beatmapKey));
+                }
+
+                // Difficulty calculation is CPU-heavy and each map is independent. Use every
+                // available core except one (kept free for UI/progress/cancellation handling).
+                // Worker priority is restored afterwards because Parallel uses shared pool threads.
+                var resultLock = new object();
+                var parallelOptions = new ParallelOptions
+                {
+                    CancellationToken = cancellationToken,
+                    MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
+                    TaskScheduler = TaskScheduler.Default,
+                };
+
+                Parallel.ForEach(pending, parallelOptions, item =>
+                {
+                    Thread currentThread = Thread.CurrentThread;
+                    ThreadPriority originalPriority = currentThread.Priority;
+
+                    try
+                    {
+                        currentThread.Priority = ThreadPriority.Highest;
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        var lookup = new DifficultyCacheLookup(item.Beatmap, rulesetInfo as RulesetInfo, orderedMods);
+                        double? rating = null;
+
+                        if (CheckExists(lookup, out StarDifficulty? exactDifficulty) && exactDifficulty.HasValue)
+                            rating = exactDifficulty.Value.Stars;
+                        else
+                        {
+                            lock (filterStarRatingCache)
+                            {
+                                if (filterStarRatingCache.TryGetValue(lookup, out double cached))
+                                    rating = cached;
+                            }
+                        }
+
+                        rating ??= computeStarRating(lookup, cancellationToken);
+
+                        if (rating.HasValue)
+                        {
+                            lock (resultLock)
+                            {
+                                results[item.Beatmap.ID] = rating.Value;
+                                persisted.Ratings[item.PersistedKey] = rating.Value;
+                            }
+
+                            lock (filterStarRatingCache)
+                                filterStarRatingCache[lookup] = rating.Value;
+                        }
+                    }
+                    finally
+                    {
+                        currentThread.Priority = originalPriority;
+                    }
+
+                    reportProgress?.Invoke(Interlocked.Increment(ref completed), beatmaps.Count);
+                });
+
+                cancellationToken.ThrowIfCancellationRequested();
+                savePersistedFilterStarRatings(profileKey, persisted);
+                return results;
+            }, cancellationToken, TaskCreationOptions.HideScheduler | TaskCreationOptions.RunContinuationsAsynchronously, filterScheduler);
+        }
+
+        private string createFilterProfileKey(IRulesetInfo rulesetInfo, IReadOnlyList<Mod> mods)
+        {
+            string serialisedMods = JsonConvert.SerializeObject(mods.Select(mod => new APIMod(mod)));
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{rulesetInfo.ShortName}|{serialisedMods}"));
+            return Convert.ToHexString(hash);
+        }
+
+        private PersistedFilterStarRatings loadPersistedFilterStarRatings(string profileKey)
+        {
+            try
+            {
+                using Stream? stream = storage.GetStream($"{persisted_filter_cache_directory}/{profileKey}.json");
+
+                if (stream == null)
+                    return new PersistedFilterStarRatings();
+
+                using var reader = new StreamReader(stream);
+                return JsonConvert.DeserializeObject<PersistedFilterStarRatings>(reader.ReadToEnd()) ?? new PersistedFilterStarRatings();
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "Failed to load persisted BPM star-rating filter cache");
+                return new PersistedFilterStarRatings();
+            }
+        }
+
+        private void savePersistedFilterStarRatings(string profileKey, PersistedFilterStarRatings ratings)
+        {
+            try
+            {
+                using Stream stream = storage.GetStream($"{persisted_filter_cache_directory}/{profileKey}.json", FileAccess.Write, FileMode.Create);
+                using var writer = new StreamWriter(stream);
+                writer.Write(JsonConvert.SerializeObject(ratings));
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "Failed to save persisted BPM star-rating filter cache");
+            }
+        }
+
+        private static string createPersistedBeatmapKey(BeatmapInfo beatmap) => $"{beatmap.ID:N}:{beatmap.Hash}";
 
         protected override Task<StarDifficulty?> ComputeValueAsync(DifficultyCacheLookup lookup, CancellationToken cancellationToken = default)
         {
@@ -306,10 +487,14 @@ namespace osu.Game.Beatmaps
                 var ruleset = rulesetInfo.CreateInstance();
                 Debug.Assert(ruleset != null);
 
-                PlayableCachedWorkingBeatmap workingBeatmap = new PlayableCachedWorkingBeatmap(beatmapManager.GetWorkingBeatmap(key.BeatmapInfo));
-                IBeatmap playableBeatmap = workingBeatmap.GetPlayableBeatmap(ruleset.RulesetInfo, key.OrderedMods, cancellationToken);
+                // Beatmap loading may update state on beatmap-dependent mods. Never allow those updates
+                // to mutate a dictionary key after it has been hashed and inserted into the cache.
+                Mod[] calculationMods = key.OrderedMods.Select(mod => mod.DeepClone()).ToArray();
 
-                var difficulty = ruleset.CreateDifficultyCalculator(workingBeatmap).Calculate(key.OrderedMods, cancellationToken);
+                PlayableCachedWorkingBeatmap workingBeatmap = new PlayableCachedWorkingBeatmap(beatmapManager.GetWorkingBeatmap(key.BeatmapInfo));
+                IBeatmap playableBeatmap = workingBeatmap.GetPlayableBeatmap(ruleset.RulesetInfo, calculationMods, cancellationToken);
+
+                var difficulty = ruleset.CreateDifficultyCalculator(workingBeatmap).Calculate(calculationMods, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var performanceCalculator = ruleset.CreatePerformanceCalculator();
@@ -317,7 +502,7 @@ namespace osu.Game.Beatmaps
                     return new StarDifficulty(difficulty, new PerformanceAttributes());
 
                 ScoreProcessor scoreProcessor = ruleset.CreateScoreProcessor();
-                scoreProcessor.Mods.Value = key.OrderedMods;
+                scoreProcessor.Mods.Value = calculationMods;
                 scoreProcessor.ApplyBeatmap(playableBeatmap);
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -325,7 +510,7 @@ namespace osu.Game.Beatmaps
                 {
                     Passed = true,
                     Accuracy = 1,
-                    Mods = key.OrderedMods,
+                    Mods = calculationMods,
                     MaxCombo = scoreProcessor.MaximumCombo,
                     Combo = scoreProcessor.MaximumCombo,
                     TotalScore = scoreProcessor.MaximumTotalScore,
@@ -358,6 +543,52 @@ namespace osu.Game.Beatmaps
             }
         }
 
+        private double? computeStarRating(in DifficultyCacheLookup key, CancellationToken cancellationToken)
+        {
+            var beatmapInfo = key.BeatmapInfo;
+            var rulesetInfo = key.Ruleset;
+
+            try
+            {
+                var ruleset = rulesetInfo.CreateInstance();
+                Debug.Assert(ruleset != null);
+
+                Mod[] calculationMods = key.OrderedMods.Select(mod => mod.DeepClone()).ToArray();
+
+                var workingBeatmap = new PlayableCachedWorkingBeatmap(beatmapManager.GetWorkingBeatmap(beatmapInfo));
+                workingBeatmap.GetPlayableBeatmap(ruleset.RulesetInfo, calculationMods, cancellationToken);
+
+                var difficulty = ruleset.CreateDifficultyCalculator(workingBeatmap).Calculate(calculationMods, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                return double.IsFinite(difficulty.StarRating) ? difficulty.StarRating : 0;
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+            catch (BeatmapInvalidForRulesetException invalidForRuleset)
+            {
+                if (rulesetInfo.Equals(beatmapInfo.Ruleset))
+                    Logger.Error(invalidForRuleset, $"Failed to convert {beatmapInfo.OnlineID} to the beatmap's default ruleset ({beatmapInfo.Ruleset}).");
+
+                return null;
+            }
+            catch (Exception unknownException)
+            {
+                Logger.Error(unknownException, "Failed to calculate beatmap difficulty for filtering");
+                return null;
+            }
+        }
+
+        public override void Clear()
+        {
+            base.Clear();
+
+            lock (filterStarRatingCache)
+                filterStarRatingCache.Clear();
+        }
+
         protected override void Dispose(bool isDisposing)
         {
             base.Dispose(isDisposing);
@@ -366,6 +597,7 @@ namespace osu.Game.Beatmaps
 
             cancelTrackedBindableUpdate();
             updateScheduler.Dispose();
+            filterScheduler.Dispose();
         }
 
         public readonly struct DifficultyCacheLookup : IEquatable<DifficultyCacheLookup>
@@ -380,6 +612,10 @@ namespace osu.Game.Beatmaps
                 // In the case that the user hasn't given us a ruleset, use the beatmap's default ruleset.
                 Ruleset = ruleset ?? BeatmapInfo.Ruleset;
                 OrderedMods = mods?.OrderBy(m => m.Acronym).Select(mod => mod.DeepClone()).ToArray() ?? Array.Empty<Mod>();
+
+                // A BPM Adjust instance follows the currently selected map. Rebind the cloned mod to this
+                // lookup's map so cached difficulty always uses this map's source BPM rather than another selection's.
+                OrderedMods.ApplyBeatmapInfo(BeatmapInfo);
             }
 
             public bool Equals(DifficultyCacheLookup other)
@@ -399,6 +635,11 @@ namespace osu.Game.Beatmaps
 
                 return hashCode.ToHashCode();
             }
+        }
+
+        private sealed class PersistedFilterStarRatings
+        {
+            public Dictionary<string, double> Ratings { get; set; } = new Dictionary<string, double>();
         }
 
         private class BindableStarDifficulty : Bindable<StarDifficulty>

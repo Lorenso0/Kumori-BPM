@@ -20,7 +20,11 @@ No unofficial osu! source files or third-party mod implementations are included.
 2. Open the mod selector.
 3. Find **BPM Adjust (BPM)** in the Fun column.
 4. Enter a positive target BPM with up to two decimal places, or use the synchronized 140–320 BPM slider. Typed values outside the slider range remain valid.
-5. Select an audio mode:
+5. Optionally use **Show only maps** to filter song select to an inclusive star-rating range:
+   - **Star rating pre-mod** uses each map's original displayed star rating.
+   - **Star rating post-mod** shows a **Calculate maps** button. It runs one complete exact pass using the same ruleset difficulty calculation as the song-select star display, shows completed/total progress, and applies the range once the pass completes. **Cancel** aborts without applying partial results. Exact results are persisted per target BPM, ruleset, mod settings, and beatmap hash, so every star range can reuse the completed dataset across future sessions.
+   - **Disabled** restores the full song list while retaining the entered range for later use.
+6. Select an audio mode:
    - **Preserve Pitch** changes tempo without shifting the song's pitch.
    - **Adjust Pitch** changes pitch with playback speed.
    - **Nightcore** uses lazer's fixed 1.5x pitch treatment and synced beat accents while compensating tempo to reach the target BPM.
@@ -31,12 +35,12 @@ No unofficial osu! source files or third-party mod implementations are included.
    - **Deep** lowers pitch by one octave while compensating tempo.
    - **Nightcore Pitch Only** applies the Nightcore pitch treatment without automatically adding beat accents.
    - **Preserve Pitch + Accents** preserves the original pitch and automatically adds Nightcore beat accents.
-6. Select a **Beat accents** mode:
+7. Select a **Beat accents** mode:
    - **Automatic** retains the audio mode's normal behavior. Nightcore and Preserve Pitch + Accents add Nightcore percussion; other modes add nothing.
    - **Off** disables additional beat sounds.
    - **Nightcore** adds lazer's beat-synchronised kick, clap, hat, and finish pattern with any audio mode.
    - **Metronome** adds one click per beat with a stronger downbeat.
-7. Choose whether **Scale map stats with BPM** should be enabled:
+8. Choose whether **Scale map stats with BPM** should be enabled:
    - **Enabled** keeps DT/HT-style rate scaling for AR and OD.
    - **Disabled** compensates rate-sensitive stats so their real-time approach and hit windows match the map's original values. Object spacing, song duration, and playback speed still follow the selected BPM.
 
