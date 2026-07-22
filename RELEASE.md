@@ -5,10 +5,12 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
-- Fixed BPM Adjust difficulty calculations losing their selected-map playback
-  rate in the difficulty cache.
-- Star rating and rate-scaled map statistics now use the same clock-rate
-  calculation as Double Time at an equivalent speed.
+- Added inclusive pre-mod and post-mod star-rating filters to BPM Adjust.
+- Added a complete, exact post-mod calculation pass with live progress and
+  cancellation. Results are cached by BPM, ruleset, mod settings, and map hash
+  for instant range changes and reuse across sessions.
+- Parallelised the explicit calculation pass while retaining a responsive UI,
+  and fixed dropdown layering and scrolling around the new controls.
 - Existing BPM settings, local scores, replays, and presets remain compatible.
 
 ## Install
