@@ -5,12 +5,12 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
-- Completed post-mod star-rating profiles now load automatically after starting
-  or updating Kumori; pressing Calculate again is no longer required.
-- Existing `.6` calculation caches migrate in place, preserving all saved map
-  ratings instead of performing another full pass.
-- Maps which cannot produce a rating are recorded as processed and are no
-  longer retried on every session.
+- Fixed saved star-rating profiles not being found after updating or changing
+  BPM audio/presentation settings that do not affect difficulty.
+- Existing legacy calculation files are adopted and migrated automatically;
+  the previously calculated ratings are activated without another full pass.
+- Star-rating cache keys now contain only difficulty-affecting BPM settings, so
+  future installations resolve the same profile consistently.
 - Existing BPM settings, local scores, replays, and presets remain compatible.
 
 ## Install

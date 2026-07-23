@@ -166,6 +166,12 @@ namespace osu.Game.Tests.Beatmaps
             AddAssert("filter rating is exact",
                 () => filterCalculation.GetResultSafely()[beatmap.ID],
                 () => Is.EqualTo(fullCalculation.GetResultSafely()!.Value.Stars).Within(0.000001));
+            AddStep("change non-difficulty BPM settings", () =>
+            {
+                var bpm = (OsuModBPMAdjust)mods.Single();
+                bpm.AudioMode.Value = BPMAdjustAudioMode.Chipmunk;
+                bpm.BeatAccents.Value = BPMAdjustBeatAccentMode.Off;
+            });
             AddStep("load persisted filter profile", () =>
                 persistedCalculation = actualDifficultyCache.LoadStarRatingsForFilterAsync(new[] { beatmap }, beatmap.Ruleset, mods));
             AddUntilStep("persisted profile loaded", () => persistedCalculation.IsCompletedSuccessfully);

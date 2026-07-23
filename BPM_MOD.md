@@ -8,7 +8,7 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 - Upstream release: `2026.711.0-lazer`
 - Upstream commit: `1164870d12bd5b9714bbffa97e809bee33458799`
 - Local branch: `bpm-adjust-live-2026.711.0`
-- Kumori release: `2026.711.0-kumori.7`
+- Kumori release: `2026.711.0-kumori.8`
 - Executable version: `2026.711.0-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 

@@ -240,7 +240,7 @@ namespace osu.Game.Beatmaps
                 Thread.CurrentThread.Priority = ThreadPriority.Highest;
 
                 string profileKey = createFilterProfileKey(rulesetInfo, orderedMods);
-                PersistedFilterStarRatings persisted = loadPersistedFilterStarRatings(profileKey) ?? new PersistedFilterStarRatings();
+                PersistedFilterStarRatings persisted = loadPersistedFilterStarRatingsForProfile(profileKey, rulesetInfo, orderedMods, false) ?? new PersistedFilterStarRatings();
                 var results = new Dictionary<Guid, double>(beatmaps.Count);
                 var pending = new List<(BeatmapInfo Beatmap, string PersistedKey)>();
                 int completed = 0;
@@ -351,7 +351,7 @@ namespace osu.Game.Beatmaps
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string profileKey = createFilterProfileKey(rulesetInfo, orderedMods);
-                PersistedFilterStarRatings? persisted = loadPersistedFilterStarRatings(profileKey);
+                PersistedFilterStarRatings? persisted = loadPersistedFilterStarRatingsForProfile(profileKey, rulesetInfo, orderedMods, true);
 
                 if (persisted == null)
                     return null;
@@ -372,8 +372,10 @@ namespace osu.Game.Beatmaps
                     }
 
                     persisted.Version = persisted_filter_cache_version;
-                    savePersistedFilterStarRatings(profileKey, persisted);
                 }
+
+                if (migrated || !storage.Exists($"{persisted_filter_cache_directory}/{profileKey}.json"))
+                    savePersistedFilterStarRatings(profileKey, persisted);
 
                 var results = new Dictionary<Guid, double>(beatmaps.Count);
 
@@ -395,9 +397,73 @@ namespace osu.Game.Beatmaps
 
         private string createFilterProfileKey(IRulesetInfo rulesetInfo, IReadOnlyList<Mod> mods)
         {
+            string serialisedMods = string.Join("|", mods.Select(mod =>
+            {
+                if (mod is ModBPMAdjust bpmAdjust)
+                {
+                    // Audio treatment, beat accents, custom pitch, and TargetInitialised do not
+                    // affect difficulty. Excluding them keeps one star profile stable across
+                    // installations and harmless presentation-setting changes.
+                    return JsonConvert.SerializeObject(new
+                    {
+                        acronym = mod.Acronym,
+                        targetBpm = bpmAdjust.TargetBPM.Value,
+                        scaleMapStatsWithBpm = bpmAdjust.ScaleMapStatsWithBPM.Value,
+                    });
+                }
+
+                return JsonConvert.SerializeObject(new APIMod(mod));
+            }));
+
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes($"v2|{rulesetInfo.ShortName}|{serialisedMods}"));
+            return Convert.ToHexString(hash);
+        }
+
+        private static string createLegacyFilterProfileKey(IRulesetInfo rulesetInfo, IReadOnlyList<Mod> mods)
+        {
             string serialisedMods = JsonConvert.SerializeObject(mods.Select(mod => new APIMod(mod)));
             byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{rulesetInfo.ShortName}|{serialisedMods}"));
             return Convert.ToHexString(hash);
+        }
+
+        private PersistedFilterStarRatings? loadPersistedFilterStarRatingsForProfile(string profileKey, IRulesetInfo rulesetInfo, IReadOnlyList<Mod> mods,
+                                                                                     bool allowSoleLegacyFallback)
+        {
+            PersistedFilterStarRatings? persisted = loadPersistedFilterStarRatings(profileKey);
+
+            if (persisted != null)
+                return persisted;
+
+            string legacyProfileKey = createLegacyFilterProfileKey(rulesetInfo, mods);
+
+            if (legacyProfileKey != profileKey && (persisted = loadPersistedFilterStarRatings(legacyProfileKey)) != null)
+            {
+                Logger.Log($"Migrating legacy BPM star-rating filter profile {legacyProfileKey} to {profileKey}.");
+                return persisted;
+            }
+
+            if (!allowSoleLegacyFallback)
+                return null;
+
+            // The first cache format contained no profile metadata, so a key created with a
+            // harmlessly different audio/UI setting cannot be identified from its contents.
+            // If there is exactly one legacy profile, it is unambiguous enough to adopt.
+            string[] legacyFiles = storage.GetFiles(persisted_filter_cache_directory, "*.json").ToArray();
+
+            if (legacyFiles.Length != 1)
+                return null;
+
+            string soleLegacyProfileKey = Path.GetFileNameWithoutExtension(legacyFiles[0]);
+
+            if (soleLegacyProfileKey == profileKey || soleLegacyProfileKey == legacyProfileKey)
+                return null;
+
+            persisted = loadPersistedFilterStarRatings(soleLegacyProfileKey);
+
+            if (persisted != null)
+                Logger.Log($"Adopting sole legacy BPM star-rating filter profile {soleLegacyProfileKey} as {profileKey}.");
+
+            return persisted;
         }
 
         private PersistedFilterStarRatings? loadPersistedFilterStarRatings(string profileKey)
