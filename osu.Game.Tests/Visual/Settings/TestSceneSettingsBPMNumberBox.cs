@@ -134,6 +134,11 @@ namespace osu.Game.Tests.Visual.Settings
             AddStep("bind calculation request", () => calculationController.CalculateRequested += () => calculationRequested = true);
             AddStep("request map calculation", () => getButton("Calculate maps").TriggerClick());
             AddAssert("calculation request sent", () => calculationRequested);
+            AddStep("begin loading saved profile", () => calculationController.BeginLoading());
+            AddAssert("loading saved profile shown", () => numberBox.ChildrenOfType<OsuSpriteText>().Any(text => text.Text.ToString() == "Loading saved maps…"));
+            AddAssert("calculate disabled while loading", () => getButton("Calculate maps").Enabled.Value, () => Is.False);
+            AddStep("complete saved profile load", () => calculationController.Complete(123));
+            AddAssert("cached map count shown", () => numberBox.ChildrenOfType<OsuSpriteText>().Any(text => text.Text.ToString() == "123 maps cached"));
             AddStep("enter inclusive range", () =>
             {
                 minimum.Text = "4.99";

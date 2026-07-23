@@ -40,6 +40,8 @@ namespace osu.Game.Beatmaps
     /// </summary>
     public partial class BeatmapDifficultyCache : MemoryCachingComponent<BeatmapDifficultyCache.DifficultyCacheLookup, StarDifficulty?>
     {
+        private const int persisted_filter_cache_version = 2;
+
         // Too many simultaneous updates can lead to stutters. One thread seems to work fine for song select display purposes.
         private readonly ThreadedTaskScheduler updateScheduler = new ThreadedTaskScheduler(1, nameof(BeatmapDifficultyCache));
 
@@ -228,7 +230,8 @@ namespace osu.Game.Beatmaps
         /// Persisted results for the same ruleset and mod settings are reused between sessions.
         /// </summary>
         public Task<IReadOnlyDictionary<Guid, double>> CalculateStarRatingsForFilterAsync(IReadOnlyList<BeatmapInfo> beatmaps, IRulesetInfo rulesetInfo, IEnumerable<Mod>? mods,
-                                                                                           Action<int, int>? reportProgress = null, CancellationToken cancellationToken = default)
+                                                                                           Action<int, int>? reportProgress = null, CancellationToken cancellationToken = default,
+                                                                                           bool retryUnavailableBeatmaps = false)
         {
             Mod[] orderedMods = mods?.OrderBy(mod => mod.Acronym).Select(mod => mod.DeepClone()).ToArray() ?? Array.Empty<Mod>();
 
@@ -237,7 +240,7 @@ namespace osu.Game.Beatmaps
                 Thread.CurrentThread.Priority = ThreadPriority.Highest;
 
                 string profileKey = createFilterProfileKey(rulesetInfo, orderedMods);
-                PersistedFilterStarRatings persisted = loadPersistedFilterStarRatings(profileKey);
+                PersistedFilterStarRatings persisted = loadPersistedFilterStarRatings(profileKey) ?? new PersistedFilterStarRatings();
                 var results = new Dictionary<Guid, double>(beatmaps.Count);
                 var pending = new List<(BeatmapInfo Beatmap, string PersistedKey)>();
                 int completed = 0;
@@ -251,6 +254,12 @@ namespace osu.Game.Beatmaps
                     if (persisted.Ratings.TryGetValue(beatmapKey, out double persistedRating))
                     {
                         results[beatmap.ID] = persistedRating;
+                        reportProgress?.Invoke(++completed, beatmaps.Count);
+                        continue;
+                    }
+
+                    if (!retryUnavailableBeatmaps && persisted.UnavailableBeatmaps.Contains(beatmapKey))
+                    {
                         reportProgress?.Invoke(++completed, beatmaps.Count);
                         continue;
                     }
@@ -301,10 +310,16 @@ namespace osu.Game.Beatmaps
                             {
                                 results[item.Beatmap.ID] = rating.Value;
                                 persisted.Ratings[item.PersistedKey] = rating.Value;
+                                persisted.UnavailableBeatmaps.Remove(item.PersistedKey);
                             }
 
                             lock (filterStarRatingCache)
                                 filterStarRatingCache[lookup] = rating.Value;
+                        }
+                        else
+                        {
+                            lock (resultLock)
+                                persisted.UnavailableBeatmaps.Add(item.PersistedKey);
                         }
                     }
                     finally
@@ -316,8 +331,65 @@ namespace osu.Game.Beatmaps
                 });
 
                 cancellationToken.ThrowIfCancellationRequested();
+                persisted.Version = persisted_filter_cache_version;
                 savePersistedFilterStarRatings(profileKey, persisted);
                 return results;
+            }, cancellationToken, TaskCreationOptions.HideScheduler | TaskCreationOptions.RunContinuationsAsynchronously, filterScheduler);
+        }
+
+        /// <summary>
+        /// Loads a complete persisted filter profile without recalculating beatmaps.
+        /// Returns <see langword="null"/> if no profile exists or the current library contains unprocessed maps.
+        /// </summary>
+        public Task<FilterStarRatingProfile?> LoadStarRatingsForFilterAsync(IReadOnlyList<BeatmapInfo> beatmaps, IRulesetInfo rulesetInfo, IEnumerable<Mod>? mods,
+                                                                            CancellationToken cancellationToken = default)
+        {
+            Mod[] orderedMods = mods?.OrderBy(mod => mod.Acronym).Select(mod => mod.DeepClone()).ToArray() ?? Array.Empty<Mod>();
+
+            return Task.Factory.StartNew(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string profileKey = createFilterProfileKey(rulesetInfo, orderedMods);
+                PersistedFilterStarRatings? persisted = loadPersistedFilterStarRatings(profileKey);
+
+                if (persisted == null)
+                    return null;
+
+                bool migrated = persisted.Version < persisted_filter_cache_version;
+
+                if (migrated)
+                {
+                    // Version 1 profiles were only written after a complete pass, but did not
+                    // record maps for which difficulty calculation returned no rating. Treat all
+                    // missing entries in that completed snapshot as unavailable during migration.
+                    foreach (BeatmapInfo beatmap in beatmaps)
+                    {
+                        string beatmapKey = createPersistedBeatmapKey(beatmap);
+
+                        if (!persisted.Ratings.ContainsKey(beatmapKey))
+                            persisted.UnavailableBeatmaps.Add(beatmapKey);
+                    }
+
+                    persisted.Version = persisted_filter_cache_version;
+                    savePersistedFilterStarRatings(profileKey, persisted);
+                }
+
+                var results = new Dictionary<Guid, double>(beatmaps.Count);
+
+                foreach (BeatmapInfo beatmap in beatmaps)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    string beatmapKey = createPersistedBeatmapKey(beatmap);
+
+                    if (persisted.Ratings.TryGetValue(beatmapKey, out double rating))
+                        results[beatmap.ID] = rating;
+                    else if (!persisted.UnavailableBeatmaps.Contains(beatmapKey))
+                        return null;
+                }
+
+                return new FilterStarRatingProfile(results, beatmaps.Count);
             }, cancellationToken, TaskCreationOptions.HideScheduler | TaskCreationOptions.RunContinuationsAsynchronously, filterScheduler);
         }
 
@@ -328,22 +400,27 @@ namespace osu.Game.Beatmaps
             return Convert.ToHexString(hash);
         }
 
-        private PersistedFilterStarRatings loadPersistedFilterStarRatings(string profileKey)
+        private PersistedFilterStarRatings? loadPersistedFilterStarRatings(string profileKey)
         {
+            string path = $"{persisted_filter_cache_directory}/{profileKey}.json";
+
+            if (!storage.Exists(path))
+                return null;
+
             try
             {
-                using Stream? stream = storage.GetStream($"{persisted_filter_cache_directory}/{profileKey}.json");
+                using Stream? stream = storage.GetStream(path);
 
                 if (stream == null)
-                    return new PersistedFilterStarRatings();
+                    return null;
 
                 using var reader = new StreamReader(stream);
-                return JsonConvert.DeserializeObject<PersistedFilterStarRatings>(reader.ReadToEnd()) ?? new PersistedFilterStarRatings();
+                return JsonConvert.DeserializeObject<PersistedFilterStarRatings>(reader.ReadToEnd());
             }
             catch (Exception exception)
             {
                 Logger.Error(exception, "Failed to load persisted BPM star-rating filter cache");
-                return new PersistedFilterStarRatings();
+                return null;
             }
         }
 
@@ -639,8 +716,12 @@ namespace osu.Game.Beatmaps
 
         private sealed class PersistedFilterStarRatings
         {
+            public int Version { get; set; }
             public Dictionary<string, double> Ratings { get; set; } = new Dictionary<string, double>();
+            public HashSet<string> UnavailableBeatmaps { get; set; } = new HashSet<string>();
         }
+
+        public sealed record FilterStarRatingProfile(IReadOnlyDictionary<Guid, double> Ratings, int TotalMaps);
 
         private class BindableStarDifficulty : Bindable<StarDifficulty>
         {

@@ -346,8 +346,9 @@ namespace osu.Game.Overlays.Settings
                     return;
                 }
 
+                bool loading = calculationController.State == BPMStarRatingCalculationState.Loading;
                 bool calculating = calculationController.State == BPMStarRatingCalculationState.Calculating;
-                calculateMapsButton.Enabled.Value = !calculating;
+                calculateMapsButton.Enabled.Value = !loading && !calculating;
                 calculateMapsButton.Text = calculationController.State == BPMStarRatingCalculationState.Completed ? "Recalculate maps" : "Calculate maps";
                 cancelCalculationButton.FadeTo(calculating ? 1 : 0, 100);
                 cancelCalculationButton.Enabled.Value = calculating;
@@ -355,6 +356,7 @@ namespace osu.Game.Overlays.Settings
 
                 calculationProgressText.Text = calculationController.State switch
                 {
+                    BPMStarRatingCalculationState.Loading => "Loading saved maps…",
                     BPMStarRatingCalculationState.Calculating => $"{calculationController.CompletedMaps:N0} / {calculationController.TotalMaps:N0} maps",
                     BPMStarRatingCalculationState.Completed => $"{calculationController.TotalMaps:N0} maps cached",
                     _ => "Not calculated",

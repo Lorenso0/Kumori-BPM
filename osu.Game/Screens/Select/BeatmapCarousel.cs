@@ -780,6 +780,7 @@ namespace osu.Game.Screens.Select
 
         private ScheduledDelegate? loadingDebounce;
         private CancellationTokenSource? postModCalculationCancellation;
+        private CancellationTokenSource? postModProfileLoadCancellation;
         private IReadOnlyDictionary<Guid, double> postModFilterRatings = new Dictionary<Guid, double>();
         private RulesetInfo? postModCalculatedRuleset;
         private Mod[]? postModCalculatedMods;
@@ -794,6 +795,7 @@ namespace osu.Game.Screens.Select
             if (postModCalculatedMods != null && !postModCalculationMatches(criteria))
             {
                 cancelPostModStarRatingCalculation(false);
+                cancelPostModProfileLoad();
                 postModCalculatedMods = null;
                 postModCalculatedRuleset = null;
                 postModFilterRatings = new Dictionary<Guid, double>();
@@ -804,7 +806,19 @@ namespace osu.Game.Screens.Select
             if (criteria.BPMStarRatingFilterMode != BPMStarRatingFilterMode.PostMod && postModCalculationCancellation != null)
                 cancelPostModStarRatingCalculation(false);
 
+            if (criteria.BPMStarRatingFilterMode != BPMStarRatingFilterMode.PostMod && postModProfileLoadCancellation != null)
+            {
+                cancelPostModProfileLoad();
+                postModCalculatedMods = null;
+                postModCalculatedRuleset = null;
+            }
+
             Criteria = criteria;
+
+            if (criteria.BPMStarRatingFilterMode == BPMStarRatingFilterMode.PostMod
+                && criteria.BPMStarRating.HasFilter
+                && postModCalculatedMods == null)
+                loadPersistedPostModStarRatings(criteria);
 
             loadingDebounce ??= Scheduler.AddDelayed(() =>
             {
@@ -856,9 +870,11 @@ namespace osu.Game.Screens.Select
             if (Criteria is not { BPMStarRatingFilterMode: BPMStarRatingFilterMode.PostMod } criteria
                 || !criteria.BPMStarRating.HasFilter
                 || criteria.Ruleset is not RulesetInfo ruleset
-                || postModCalculationCancellation != null)
+                || postModCalculationCancellation != null
+                || postModProfileLoadCancellation != null)
                 return;
 
+            bool retryUnavailableBeatmaps = bpmStarRatingCalculationController.State == BPMStarRatingCalculationState.Completed;
             postModFilterReady = false;
             postModFilterRatings = new Dictionary<Guid, double>();
             postModCalculatedRuleset = ruleset;
@@ -870,8 +886,50 @@ namespace osu.Game.Screens.Select
             var cancellation = postModCalculationCancellation = new CancellationTokenSource();
             bpmStarRatingCalculationController.Begin(beatmaps.Length);
 
-            difficultyCache.CalculateStarRatingsForFilterAsync(beatmaps, ruleset, postModCalculatedMods, reportPostModProgress, cancellation.Token)
+            difficultyCache.CalculateStarRatingsForFilterAsync(beatmaps, ruleset, postModCalculatedMods, reportPostModProgress, cancellation.Token, retryUnavailableBeatmaps)
                            .ContinueWith(task => Schedule(() => finishPostModCalculation(task, cancellation)), CancellationToken.None);
+        }
+
+        private void loadPersistedPostModStarRatings(FilterCriteria criteria)
+        {
+            if (criteria.Ruleset is not RulesetInfo ruleset || postModProfileLoadCancellation != null)
+                return;
+
+            postModCalculatedRuleset = ruleset;
+            postModCalculatedMods = criteria.Mods?.Select(mod => mod.DeepClone()).ToArray() ?? Array.Empty<Mod>();
+
+            BeatmapInfo[] beatmaps = Items.Where(beatmap => !beatmap.Hidden && beatmap.AllowGameplayWithRuleset(ruleset, true)).ToArray();
+            var cancellation = postModProfileLoadCancellation = new CancellationTokenSource();
+            bpmStarRatingCalculationController.BeginLoading();
+
+            difficultyCache.LoadStarRatingsForFilterAsync(beatmaps, ruleset, postModCalculatedMods, cancellation.Token)
+                           .ContinueWith(task => Schedule(() => finishPostModProfileLoad(task, cancellation)), CancellationToken.None);
+        }
+
+        private void finishPostModProfileLoad(Task<BeatmapDifficultyCache.FilterStarRatingProfile?> task, CancellationTokenSource cancellation)
+        {
+            if (!ReferenceEquals(postModProfileLoadCancellation, cancellation))
+            {
+                cancellation.Dispose();
+                return;
+            }
+
+            postModProfileLoadCancellation = null;
+            cancellation.Dispose();
+
+            if (!task.IsCompletedSuccessfully
+                || task.GetResultSafely() is not BeatmapDifficultyCache.FilterStarRatingProfile profile
+                || Criteria is not { BPMStarRatingFilterMode: BPMStarRatingFilterMode.PostMod } criteria
+                || !postModCalculationMatches(criteria))
+            {
+                bpmStarRatingCalculationController.Reset();
+                return;
+            }
+
+            postModFilterRatings = profile.Ratings;
+            postModFilterReady = true;
+            bpmStarRatingCalculationController.Complete(profile.TotalMaps);
+            Filter(criteria);
         }
 
         private void reportPostModProgress(int completed, int total)
@@ -925,6 +983,14 @@ namespace osu.Game.Screens.Select
                 Filter(Criteria);
         }
 
+        private void cancelPostModProfileLoad()
+        {
+            var cancellation = postModProfileLoadCancellation;
+            postModProfileLoadCancellation = null;
+            cancellation?.Cancel();
+            bpmStarRatingCalculationController.Reset();
+        }
+
         #endregion
 
         protected override void Dispose(bool isDisposing)
@@ -933,6 +999,8 @@ namespace osu.Game.Screens.Select
             bpmStarRatingCalculationController.CancelRequested -= cancelPostModStarRatingCalculation;
             postModCalculationCancellation?.Cancel();
             postModCalculationCancellation?.Dispose();
+            postModProfileLoadCancellation?.Cancel();
+            postModProfileLoadCancellation?.Dispose();
             base.Dispose(isDisposing);
         }
 

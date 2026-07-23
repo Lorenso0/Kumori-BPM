@@ -19,6 +19,14 @@ namespace osu.Game.Screens.Select
 
         public void RequestCancellation() => CancelRequested?.Invoke();
 
+        internal void BeginLoading()
+        {
+            State = BPMStarRatingCalculationState.Loading;
+            CompletedMaps = 0;
+            TotalMaps = 0;
+            ProgressChanged?.Invoke();
+        }
+
         internal void Begin(int totalMaps)
         {
             State = BPMStarRatingCalculationState.Calculating;
@@ -33,9 +41,13 @@ namespace osu.Game.Screens.Select
             ProgressChanged?.Invoke();
         }
 
-        internal void Complete()
+        internal void Complete(int? totalMaps = null)
         {
             State = BPMStarRatingCalculationState.Completed;
+
+            if (totalMaps.HasValue)
+                TotalMaps = totalMaps.Value;
+
             CompletedMaps = TotalMaps;
             ProgressChanged?.Invoke();
         }
@@ -52,6 +64,7 @@ namespace osu.Game.Screens.Select
     public enum BPMStarRatingCalculationState
     {
         Idle,
+        Loading,
         Calculating,
         Completed,
     }

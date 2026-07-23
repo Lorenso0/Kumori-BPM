@@ -145,6 +145,7 @@ namespace osu.Game.Tests.Beatmaps
         {
             Task<StarDifficulty?> fullCalculation = null;
             Task<IReadOnlyDictionary<Guid, double>> filterCalculation = null;
+            Task<BeatmapDifficultyCache.FilterStarRatingProfile> persistedCalculation = null;
             BeatmapInfo beatmap = null;
             Mod[] mods = null;
 
@@ -164,6 +165,13 @@ namespace osu.Game.Tests.Beatmaps
             AddUntilStep("calculations complete", () => fullCalculation.IsCompletedSuccessfully && filterCalculation.IsCompletedSuccessfully);
             AddAssert("filter rating is exact",
                 () => filterCalculation.GetResultSafely()[beatmap.ID],
+                () => Is.EqualTo(fullCalculation.GetResultSafely()!.Value.Stars).Within(0.000001));
+            AddStep("load persisted filter profile", () =>
+                persistedCalculation = actualDifficultyCache.LoadStarRatingsForFilterAsync(new[] { beatmap }, beatmap.Ruleset, mods));
+            AddUntilStep("persisted profile loaded", () => persistedCalculation.IsCompletedSuccessfully);
+            AddAssert("persisted profile is complete", () => persistedCalculation.GetResultSafely(), () => Is.Not.Null);
+            AddAssert("persisted rating is exact",
+                () => persistedCalculation.GetResultSafely()!.Ratings[beatmap.ID],
                 () => Is.EqualTo(fullCalculation.GetResultSafely()!.Value.Stars).Within(0.000001));
         }
 

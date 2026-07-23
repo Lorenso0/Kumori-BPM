@@ -8,7 +8,7 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 - Upstream release: `2026.711.0-lazer`
 - Upstream commit: `1164870d12bd5b9714bbffa97e809bee33458799`
 - Local branch: `bpm-adjust-live-2026.711.0`
-- Kumori release: `2026.711.0-kumori.6`
+- Kumori release: `2026.711.0-kumori.7`
 - Executable version: `2026.711.0-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
@@ -22,7 +22,7 @@ No unofficial osu! source files or third-party mod implementations are included.
 4. Enter a positive target BPM with up to two decimal places, or use the synchronized 140–320 BPM slider. Typed values outside the slider range remain valid.
 5. Optionally use **Show only maps** to filter song select to an inclusive star-rating range:
    - **Star rating pre-mod** uses each map's original displayed star rating.
-   - **Star rating post-mod** shows a **Calculate maps** button. It runs one complete exact pass using the same ruleset difficulty calculation as the song-select star display, shows completed/total progress, and applies the range once the pass completes. **Cancel** aborts without applying partial results. Exact results are persisted per target BPM, ruleset, mod settings, and beatmap hash, so every star range can reuse the completed dataset across future sessions.
+   - **Star rating post-mod** automatically loads a completed profile for the selected target BPM, ruleset, and mod settings. If no complete profile exists, it shows a **Calculate maps** button for one complete exact pass using the same ruleset difficulty calculation as the song-select star display. The pass shows completed/total progress, and **Cancel** aborts without applying partial results. Exact results and unavailable maps are persisted by beatmap hash, so every star range can reuse the completed dataset across future sessions without retrying failed maps.
    - **Disabled** restores the full song list while retaining the entered range for later use.
 6. Select an audio mode:
    - **Preserve Pitch** changes tempo without shifting the song's pitch.

@@ -5,12 +5,12 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
-- Added inclusive pre-mod and post-mod star-rating filters to BPM Adjust.
-- Added a complete, exact post-mod calculation pass with live progress and
-  cancellation. Results are cached by BPM, ruleset, mod settings, and map hash
-  for instant range changes and reuse across sessions.
-- Parallelised the explicit calculation pass while retaining a responsive UI,
-  and fixed dropdown layering and scrolling around the new controls.
+- Completed post-mod star-rating profiles now load automatically after starting
+  or updating Kumori; pressing Calculate again is no longer required.
+- Existing `.6` calculation caches migrate in place, preserving all saved map
+  ratings instead of performing another full pass.
+- Maps which cannot produce a rating are recorded as processed and are no
+  longer retried on every session.
 - Existing BPM settings, local scores, replays, and presets remain compatible.
 
 ## Install
