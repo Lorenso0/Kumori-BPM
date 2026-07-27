@@ -5,11 +5,11 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 ## Source
 
 - Upstream repository: `https://github.com/ppy/osu.git`
-- Upstream release: `2026.711.0-lazer`
-- Upstream commit: `1164870d12bd5b9714bbffa97e809bee33458799`
-- Local branch: `bpm-adjust-live-2026.711.0`
-- Kumori release: `2026.711.0-kumori.8`
-- Executable version: `2026.711.0-lazer`
+- Upstream release: `2026.726.0-lazer`
+- Upstream commit: `5da71008b082d1a77e4bb301dc98886f1f24b895`
+- Local branch: `kumori`
+- Kumori release: `2026.726.0-kumori.1`
+- Executable version: `2026.726.0-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
 No unofficial osu! source files or third-party mod implementations are included.

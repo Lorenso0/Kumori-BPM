@@ -203,7 +203,7 @@ namespace osu.Game.Screens.Play
             score.ScoreInfo.Date = DateTimeOffset.Now;
 
             await submitScore(score).ConfigureAwait(false);
-            spectatorClient.EndPlaying(GameplayState);
+            spectatorClient.EndPlaying(token, GameplayState);
             userStatisticsWatcher?.RegisterForStatisticsUpdateAfter(score.ScoreInfo);
         }
 
@@ -262,7 +262,7 @@ namespace osu.Game.Screens.Play
                 Task.Run(async () =>
                 {
                     await submitScore(scoreCopy).ConfigureAwait(false);
-                    spectatorClient.EndPlaying(GameplayState);
+                    spectatorClient.EndPlaying(token, GameplayState);
                 }).FireAndForget();
             }
         }

@@ -138,6 +138,8 @@ namespace osu.Game
 
         private UserProfileOverlay userProfile;
 
+        private LoginOverlay loginOverlay;
+
         private BeatmapSetOverlay beatmapSetOverlay;
 
         private WikiOverlay wikiOverlay;
@@ -1232,7 +1234,7 @@ namespace osu.Game
             loadComponentSingleFile(wikiOverlay = new WikiOverlay(), overlayContent.Add, true);
             loadComponentSingleFile(skinEditor = new SkinEditorOverlay(ScreenContainer), overlayContent.Add, true);
 
-            loadComponentSingleFile(new LoginOverlay
+            loadComponentSingleFile(loginOverlay = new LoginOverlay
             {
                 Anchor = Anchor.TopRight,
                 Origin = Anchor.TopRight,
@@ -1258,7 +1260,7 @@ namespace osu.Game
             Add(new FriendPresenceNotifier());
 
             // side overlays which cancel each other.
-            var singleDisplaySideOverlays = new OverlayContainer[] { Settings, Notifications, FirstRunOverlay };
+            var singleDisplaySideOverlays = new OverlayContainer[] { Settings, Notifications, FirstRunOverlay, loginOverlay };
 
             foreach (var overlay in singleDisplaySideOverlays)
             {

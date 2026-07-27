@@ -1,16 +1,16 @@
 # Kumori BPM release
 
 This is an unofficial Windows x64 build based on osu!lazer
-`2026.711.0-lazer`.
+`2026.726.0-lazer`.
 
 ## What's new
 
-- Fixed saved star-rating profiles not being found after updating or changing
-  BPM audio/presentation settings that do not affect difficulty.
-- Existing legacy calculation files are adopted and migrated automatically;
-  the previously calculated ratings are activated without another full pass.
-- Star-rating cache keys now contain only difficulty-affecting BPM settings, so
-  future installations resolve the same profile consistently.
+- Updated the upstream osu!lazer base from `2026.711.0-lazer` to
+  `2026.726.0-lazer`.
+- Includes the latest upstream gameplay, editor, spectator, storyboard, input,
+  localisation, and performance fixes.
+- Preserves Kumori's BPM Adjust mod, post-mod star-rating profiles, updater,
+  unranked safety policy, and isolated-profile option.
 - Existing BPM settings, local scores, replays, and presets remain compatible.
 
 ## Install

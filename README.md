@@ -6,7 +6,7 @@
 
 Kumori is an unofficial Windows build of [osu!lazer](https://github.com/ppy/osu)
 with a target-BPM gameplay mod. It is based on the public
-`2026.711.0-lazer` release.
+`2026.726.0-lazer` release.
 
 This project is not affiliated with or endorsed by ppy Pty Ltd. The osu! name
 and branding belong to their respective owners.
