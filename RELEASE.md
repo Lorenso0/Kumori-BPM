@@ -1,12 +1,12 @@
 # Kumori BPM release
 
 This is an unofficial Windows x64 build based on osu!lazer
-`2026.726.0-lazer`.
+`2026.804.2-lazer`.
 
 ## What's new
 
-- Updated the upstream osu!lazer base from `2026.711.0-lazer` to
-  `2026.726.0-lazer`.
+- Updated the upstream osu!lazer base from `2026.726.0-lazer` to
+  `2026.804.2-lazer`.
 - Includes the latest upstream gameplay, editor, spectator, storyboard, input,
   localisation, and performance fixes.
 - Preserves Kumori's BPM Adjust mod, post-mod star-rating profiles, updater,

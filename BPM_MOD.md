@@ -5,11 +5,11 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 ## Source
 
 - Upstream repository: `https://github.com/ppy/osu.git`
-- Upstream release: `2026.726.0-lazer`
-- Upstream commit: `5da71008b082d1a77e4bb301dc98886f1f24b895`
+- Upstream release: `2026.804.2-lazer`
+- Upstream commit: `3c1c96f742e7aae2ff67a7361e058fe91ca3b955`
 - Local branch: `kumori`
-- Kumori release: `2026.726.0-kumori.1`
-- Executable version: `2026.726.0-lazer`
+- Kumori release: `2026.804.2-kumori.1`
+- Executable version: `2026.804.2-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
 No unofficial osu! source files or third-party mod implementations are included.
