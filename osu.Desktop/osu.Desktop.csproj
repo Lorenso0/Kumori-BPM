@@ -13,7 +13,9 @@
          external integrations such as tosu. Source is pinned to the matching tag. -->
     <Version>$(UpstreamVersion)-lazer</Version>
     <FileVersion>$(UpstreamVersion)</FileVersion>
-    <RuntimeFrameworkVersion>8.0.28</RuntimeFrameworkVersion>
+    <!-- Official lazer ships a low-latency runtime overlay. Packaging verifies and
+         embeds those exact files from the matching official Windows release. -->
+    <RuntimeFrameworkVersion>$(OfficialRuntimeVersion)</RuntimeFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup>
     <StartupObject>osu.Desktop.Program</StartupObject>

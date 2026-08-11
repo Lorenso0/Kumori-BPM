@@ -15,6 +15,7 @@ using osu.Game.Graphics;
 using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.UI;
+using osu.Game.Screens.Select;
 
 namespace osu.Game.Rulesets.Mods
 {
@@ -72,6 +73,15 @@ namespace osu.Game.Rulesets.Mods
 
         [SettingSource("Target initialised", "Retains whether a neutral target was explicitly selected", Visible = false)]
         public BindableBool TargetInitialised { get; } = new BindableBool();
+
+        [SettingSource("Star filter mode", "Retains the song-select star filter in personal presets", Visible = false)]
+        public Bindable<BPMStarRatingFilterMode> StarRatingFilterMode { get; } = new Bindable<BPMStarRatingFilterMode>();
+
+        [SettingSource("Minimum star rating", "Retains the minimum song-select star rating in personal presets", Visible = false)]
+        public Bindable<string> StarRatingFilterMinimum { get; } = new Bindable<string>(string.Empty);
+
+        [SettingSource("Maximum star rating", "Retains the maximum song-select star rating in personal presets", Visible = false)]
+        public Bindable<string> StarRatingFilterMaximum { get; } = new Bindable<string>(string.Empty);
 
         public override BindableNumber<double> SpeedChange { get; } = new BindableDouble(1)
         {

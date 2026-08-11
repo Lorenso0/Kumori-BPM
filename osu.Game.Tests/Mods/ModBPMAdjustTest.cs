@@ -21,6 +21,7 @@ using osu.Game.Rulesets.Osu.Mods;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Taiko;
 using osu.Game.Rulesets.Taiko.Mods;
+using osu.Game.Screens.Select;
 using osu.Game.Utils;
 using osu.Game.Scoring;
 
@@ -99,6 +100,26 @@ namespace osu.Game.Tests.Mods
             {
                 Assert.That(mod.SourceBPM, Is.EqualTo(120));
                 Assert.That(mod.SpeedChange.Value, Is.EqualTo(1.5));
+            });
+        }
+
+        [Test]
+        public void TestPersonalPresetRetainsStarRatingFilter()
+        {
+            var mod = new OsuModBPMAdjust
+            {
+                StarRatingFilterMode = { Value = BPMStarRatingFilterMode.PostMod },
+                StarRatingFilterMinimum = { Value = "6" },
+                StarRatingFilterMaximum = { Value = "7" },
+            };
+
+            var restored = (OsuModBPMAdjust)new APIMod(mod).ToMod(new OsuRuleset());
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(restored.StarRatingFilterMode.Value, Is.EqualTo(BPMStarRatingFilterMode.PostMod));
+                Assert.That(restored.StarRatingFilterMinimum.Value, Is.EqualTo("6"));
+                Assert.That(restored.StarRatingFilterMaximum.Value, Is.EqualTo("7"));
             });
         }
 

@@ -5,6 +5,10 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
+- Fixes experimental-audio crackling by packaging the exact low-latency .NET
+  runtime used by the matching official lazer release.
+- Personal mod presets now retain the pre/post-mod star filter and its range.
+- Replaces the dense BPM diagnostics paragraph with a clean, readable preview.
 - Updated the upstream osu!lazer base from `2026.726.0-lazer` to
   `2026.804.2-lazer`.
 - Includes the latest upstream gameplay, editor, spectator, storyboard, input,

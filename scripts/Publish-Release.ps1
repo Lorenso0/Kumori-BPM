@@ -55,23 +55,12 @@ New-Item -ItemType Directory -Path $stageDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $velopackDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 
-$publishArguments = @(
-    'publish',
-    (Join-Path $repositoryRoot 'osu.Desktop/osu.Desktop.csproj'),
-    '-c', 'Release',
-    '-r', 'win-x64',
-    '--self-contained', 'true',
-    '-o', $stageDirectory,
-    '-p:ContinuousIntegrationBuild=true'
-)
-if ($NoRestore) {
-    $publishArguments += '--no-restore'
+$publishArguments = @{
+    OutputDirectory = $stageDirectory
+    ContinuousIntegrationBuild = $true
+    NoRestore = $NoRestore
 }
-
-& dotnet @publishArguments
-if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish failed with exit code $LASTEXITCODE."
-}
+& (Join-Path $PSScriptRoot 'Publish-WithOfficialRuntime.ps1') @publishArguments
 
 & (Join-Path $PSScriptRoot 'Test-ReleaseMetadata.ps1') -ExecutablePath (Join-Path $stageDirectory 'osu!.exe')
 

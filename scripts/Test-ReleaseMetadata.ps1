@@ -19,6 +19,7 @@ if ($null -eq $releaseProperties) {
 $upstreamVersion = ([string] $releaseProperties.UpstreamVersion).Trim()
 $kumoriRevision = ([string] $releaseProperties.KumoriRevision).Trim()
 $kumoriExpression = ([string] $releaseProperties.KumoriVersion).Trim()
+$officialRuntimeVersion = ([string] $releaseProperties.OfficialRuntimeVersion).Trim()
 
 if ($upstreamVersion -notmatch '^\d{4}\.\d+\.\d+$') {
     throw "Invalid UpstreamVersion '$upstreamVersion'."
@@ -28,6 +29,9 @@ if ($kumoriRevision -notmatch '^\d+$' -or [int] $kumoriRevision -lt 1) {
 }
 if ($kumoriExpression -ne '$(UpstreamVersion)-kumori.$(KumoriRevision)') {
     throw 'KumoriVersion must be derived from UpstreamVersion and KumoriRevision.'
+}
+if ($officialRuntimeVersion -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Invalid OfficialRuntimeVersion '$officialRuntimeVersion'."
 }
 
 $kumoriVersion = "$upstreamVersion-kumori.$kumoriRevision"
@@ -43,6 +47,9 @@ if (([string] $projectProperties.Version).Trim() -ne '$(UpstreamVersion)-lazer')
 }
 if (([string] $projectProperties.FileVersion).Trim() -ne '$(UpstreamVersion)') {
     throw 'The desktop file version must be derived from UpstreamVersion.'
+}
+if (([string] $projectProperties.RuntimeFrameworkVersion).Trim() -ne '$(OfficialRuntimeVersion)') {
+    throw 'The desktop runtime version must be derived from OfficialRuntimeVersion.'
 }
 
 $requiredDocumentation = @(

@@ -401,9 +401,9 @@ namespace osu.Game.Beatmaps
             {
                 if (mod is ModBPMAdjust bpmAdjust)
                 {
-                    // Audio treatment, beat accents, custom pitch, and TargetInitialised do not
-                    // affect difficulty. Excluding them keeps one star profile stable across
-                    // installations and harmless presentation-setting changes.
+                    // Audio treatment, beat accents, custom pitch, target lifecycle, and the
+                    // song-select filter stored with personal presets do not affect difficulty.
+                    // Excluding them keeps one star profile stable across harmless UI changes.
                     return JsonConvert.SerializeObject(new
                     {
                         acronym = mod.Acronym,

@@ -81,6 +81,10 @@ namespace osu.Game.Overlays.Settings
             private OsuSpriteText previewText = null!;
             private RoundedButton? addPresetButton;
             private Bindable<string>? presetStorage;
+            private Bindable<BPMStarRatingFilterMode>? configuredStarRatingFilterMode;
+            private Bindable<string>? configuredStarRatingMinimum;
+            private Bindable<string>? configuredStarRatingMaximum;
+            private ModBPMAdjust? filterSettingsMod;
             private bool updatingFromText;
             private bool updatingSlider;
             private string lastPreview = string.Empty;
@@ -343,9 +347,39 @@ namespace osu.Game.Overlays.Settings
                 presetStorage = config.GetBindable<string>(OsuSetting.BPMAdjustPresets);
                 presetStorage.BindValueChanged(e => loadPresets(e.NewValue), true);
 
-                starRatingFilterMode.Current = config.GetBindable<BPMStarRatingFilterMode>(OsuSetting.BPMStarRatingFilterMode);
-                starRatingMinimum.Current = config.GetBindable<string>(OsuSetting.BPMStarRatingFilterMinimum);
-                starRatingMaximum.Current = config.GetBindable<string>(OsuSetting.BPMStarRatingFilterMaximum);
+                configuredStarRatingFilterMode = config.GetBindable<BPMStarRatingFilterMode>(OsuSetting.BPMStarRatingFilterMode);
+                configuredStarRatingMinimum = config.GetBindable<string>(OsuSetting.BPMStarRatingFilterMinimum);
+                configuredStarRatingMaximum = config.GetBindable<string>(OsuSetting.BPMStarRatingFilterMaximum);
+
+                filterSettingsMod = getMod();
+
+                if (filterSettingsMod == null)
+                {
+                    starRatingFilterMode.Current = configuredStarRatingFilterMode;
+                    starRatingMinimum.Current = configuredStarRatingMinimum;
+                    starRatingMaximum.Current = configuredStarRatingMaximum;
+                }
+                else
+                {
+                    // A newly-created BPM mod adopts the last-used filter. A mod restored from a
+                    // personal preset already contains its saved values and takes precedence.
+                    if (filterSettingsMod.StarRatingFilterMode.IsDefault
+                        && filterSettingsMod.StarRatingFilterMinimum.IsDefault
+                        && filterSettingsMod.StarRatingFilterMaximum.IsDefault)
+                    {
+                        filterSettingsMod.StarRatingFilterMode.Value = configuredStarRatingFilterMode.Value;
+                        filterSettingsMod.StarRatingFilterMinimum.Value = configuredStarRatingMinimum.Value;
+                        filterSettingsMod.StarRatingFilterMaximum.Value = configuredStarRatingMaximum.Value;
+                    }
+
+                    configuredStarRatingFilterMode.BindTo(filterSettingsMod.StarRatingFilterMode);
+                    configuredStarRatingMinimum.BindTo(filterSettingsMod.StarRatingFilterMinimum);
+                    configuredStarRatingMaximum.BindTo(filterSettingsMod.StarRatingFilterMaximum);
+
+                    starRatingFilterMode.Current = filterSettingsMod.StarRatingFilterMode;
+                    starRatingMinimum.Current = filterSettingsMod.StarRatingFilterMinimum;
+                    starRatingMaximum.Current = filterSettingsMod.StarRatingFilterMaximum;
+                }
 
                 if (calculationController != null)
                     calculationController.ProgressChanged += updateCalculationControls;
@@ -374,21 +408,24 @@ namespace osu.Game.Overlays.Settings
                     return "Select a beatmap to preview the BPM change.";
 
                 BPMAdjustPreview preview = mod.CreatePreview(beatmap.BeatmapInfo.Length);
-                string target = preview.TargetBPM is double bpm ? $"{bpm:0.##}" : "neutral";
+                string target = preview.TargetBPM is double bpm ? $"{bpm:0.##}" : "Original";
                 string duration = preview.OriginalLength > 0
-                    ? $" | {formatDuration(preview.OriginalLength)} -> {formatDuration(preview.AdjustedLength)}"
+                    ? $"Length {formatDuration(preview.OriginalLength)} → {formatDuration(preview.AdjustedLength)}"
                     : string.Empty;
-                string warning = preview.AudioFallbackActive
-                    ? " | frequency fallback"
+                string audio = preview.AudioFallbackActive
+                    ? "Frequency fallback"
                     : preview.ExtremeRate
-                        ? " | extreme processing"
+                        ? "Extreme audio processing"
                         : preview.HeavyTimeStretching
-                            ? " | heavy time stretching"
-                            : preview.LargePitchShift ? " | large pitch shift" : " | clean";
+                            ? "Heavy time-stretch"
+                            : preview.LargePitchShift ? "Large pitch shift" : "Clean audio range";
+                string pitch = Math.Abs(preview.PitchSemitones) < 0.005
+                    ? "Pitch preserved"
+                    : $"Pitch {preview.PitchSemitones:+0.##;-0.##;0} st";
                 string variableRange = getVariableBPMRange(beatmap, preview.Rate);
 
                 return string.Create(CultureInfo.InvariantCulture,
-                    $"{preview.SourceBPM:0.##} -> {target} BPM | {preview.Rate:0.####}x{duration}\nPitch {preview.PitchSemitones:+0.##;-0.##;0} st | tempo {preview.TempoAdjustment:0.####}x | stats {(preview.ScaleMapStats ? "scaled" : "preserved")}{variableRange}{warning}");
+                    $"{preview.SourceBPM:0.##} → {target} BPM  •  {preview.Rate:0.##}× speed\n{duration}{(duration.Length > 0 ? "  •  " : string.Empty)}{pitch}\nStats {(preview.ScaleMapStats ? "scaled" : "preserved")}  •  {audio}{variableRange}");
             }
 
             private static string getVariableBPMRange(WorkingBeatmap beatmap, double rate)
@@ -402,7 +439,7 @@ namespace osu.Game.Overlays.Settings
                 if (!BPMResolver.IsValid(minimum) || !BPMResolver.IsValid(maximum) || Math.Abs(maximum - minimum) < 0.01)
                     return string.Empty;
 
-                return FormattableString.Invariant($" | range {minimum:0.##}-{maximum:0.##} -> {minimum * rate:0.##}-{maximum * rate:0.##}");
+                return FormattableString.Invariant($"\nMap range {minimum:0.##}–{maximum:0.##} → {minimum * rate:0.##}–{maximum * rate:0.##} BPM");
             }
 
             private static string formatDuration(double milliseconds)
@@ -442,6 +479,13 @@ namespace osu.Game.Overlays.Settings
             {
                 if (calculationController != null)
                     calculationController.ProgressChanged -= updateCalculationControls;
+
+                if (filterSettingsMod != null)
+                {
+                    configuredStarRatingFilterMode?.UnbindFrom(filterSettingsMod.StarRatingFilterMode);
+                    configuredStarRatingMinimum?.UnbindFrom(filterSettingsMod.StarRatingFilterMinimum);
+                    configuredStarRatingMaximum?.UnbindFrom(filterSettingsMod.StarRatingFilterMaximum);
+                }
 
                 base.Dispose(isDisposing);
             }

@@ -23,27 +23,12 @@ if (Test-Path -LiteralPath $outputDirectory) {
 
 New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 
-$publishArguments = @(
-    'publish',
-    (Join-Path $repositoryRoot 'osu.Desktop/osu.Desktop.csproj'),
-    '-c', 'Release',
-    '-r', 'win-x64',
-    '--self-contained', 'true',
-    '-o', $outputDirectory,
-    '-p:PublishSingleFile=true',
-    '-p:IncludeNativeLibrariesForSelfExtract=true',
-    '-p:DebugType=None',
-    '-p:DebugSymbols=false'
-)
-
-if ($NoRestore) {
-    $publishArguments += '--no-restore'
+$publishArguments = @{
+    OutputDirectory = $outputDirectory
+    SingleFile = $true
+    NoRestore = $NoRestore
 }
-
-& dotnet @publishArguments
-if ($LASTEXITCODE -ne 0) {
-    throw "Standalone publish failed with exit code $LASTEXITCODE."
-}
+& (Join-Path $PSScriptRoot 'Publish-WithOfficialRuntime.ps1') @publishArguments
 
 $publishedExecutable = Join-Path $outputDirectory 'osu!.exe'
 

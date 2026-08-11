@@ -2,8 +2,9 @@
 <Project>
   <PropertyGroup Label="Kumori Release">
     <UpstreamVersion>2026.804.2</UpstreamVersion>
-    <KumoriRevision>3</KumoriRevision>
+    <KumoriRevision>4</KumoriRevision>
     <KumoriVersion>$(UpstreamVersion)-kumori.$(KumoriRevision)</KumoriVersion>
+    <OfficialRuntimeVersion>8.0.29</OfficialRuntimeVersion>
   </PropertyGroup>
   <PropertyGroup Label="C#">
     <LangVersion>12.0</LangVersion>

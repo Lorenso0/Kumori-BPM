@@ -14,6 +14,11 @@ if ($UpstreamTag -notmatch '^(?<version>\d{4}\.\d+\.\d+)-lazer$') {
 $newVersion = $Matches.version
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $utf8 = [System.Text.UTF8Encoding]::new($false)
+$artifactsRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot 'artifacts'))
+
+. (Join-Path $PSScriptRoot 'Official-LazerRuntime.ps1')
+$officialPackage = Get-OfficialLazerPackage -UpstreamVersion $newVersion -ArtifactsRoot $artifactsRoot
+$officialRuntimeVersion = (Get-OfficialLazerRuntimeInfo -PackagePath $officialPackage).Version
 
 [xml] $buildProperties = Get-Content -LiteralPath (Join-Path $repositoryRoot 'Directory.Build.props')
 $releaseProperties = @($buildProperties.Project.PropertyGroup) |
@@ -51,7 +56,8 @@ function Update-TextFile {
 Update-TextFile 'Directory.Build.props' {
     param($content)
     $content = $content -replace "<UpstreamVersion>$([regex]::Escape($oldVersion))</UpstreamVersion>", "<UpstreamVersion>$newVersion</UpstreamVersion>"
-    $content -replace '<KumoriRevision>\d+</KumoriRevision>', '<KumoriRevision>1</KumoriRevision>'
+    $content = $content -replace '<KumoriRevision>\d+</KumoriRevision>', '<KumoriRevision>1</KumoriRevision>'
+    $content -replace '<OfficialRuntimeVersion>\d+\.\d+\.\d+</OfficialRuntimeVersion>', "<OfficialRuntimeVersion>$officialRuntimeVersion</OfficialRuntimeVersion>"
 }
 
 Update-TextFile 'BPM_MOD.md' {
@@ -74,4 +80,4 @@ Update-TextFile 'RELEASE.md' {
 }
 
 & (Join-Path $PSScriptRoot 'Test-ReleaseMetadata.ps1')
-Write-Host "Updated release metadata from $oldVersion-lazer to $UpstreamTag ($upstreamCommit)."
+Write-Host "Updated release metadata from $oldVersion-lazer to $UpstreamTag ($upstreamCommit), using official runtime $officialRuntimeVersion."
