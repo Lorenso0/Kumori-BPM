@@ -38,6 +38,10 @@ jobs:
       - name: Restore pinned build tools
         run: dotnet tool restore
 
+      - name: Validate release metadata
+        shell: pwsh
+        run: ./scripts/Test-ReleaseMetadata.ps1
+
       - name: Restore
         run: |
           dotnet restore osu.Desktop.slnf

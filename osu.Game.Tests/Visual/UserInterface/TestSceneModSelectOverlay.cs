@@ -228,6 +228,7 @@ namespace osu.Game.Tests.Visual.UserInterface
             AddUntilStep("any column dimmed", () => this.ChildrenOfType<ModColumn>().Any(column => !column.Active.Value));
 
             ModSelectColumn lastColumn = null!;
+            ModPanel firstVisiblePanel = null!;
 
             AddAssert("last column dimmed", () => !this.ChildrenOfType<ModColumn>().Last().Active.Value);
             AddStep("request scroll to last column", () =>
@@ -240,10 +241,11 @@ namespace osu.Game.Tests.Visual.UserInterface
 
             AddStep("click panel", () =>
             {
-                InputManager.MoveMouseTo(lastColumn.ChildrenOfType<ModPanel>().First());
+                firstVisiblePanel = lastColumn.ChildrenOfType<ModPanel>().First(panel => panel.Visible);
+                InputManager.MoveMouseTo(firstVisiblePanel);
                 InputManager.Click(MouseButton.Left);
             });
-            AddUntilStep("panel selected", () => lastColumn.ChildrenOfType<ModPanel>().First().Active.Value);
+            AddUntilStep("panel selected", () => firstVisiblePanel.Active.Value);
         }
 
         [Test]
@@ -880,7 +882,9 @@ namespace osu.Game.Tests.Visual.UserInterface
             AddAssert("all columns visible", () => this.ChildrenOfType<ModColumn>().All(col => col.IsPresent));
 
             AddStep("set search", () => modSelectOverlay.SearchTerm = "HD");
-            AddAssert("two columns visible", () => this.ChildrenOfType<ModColumn>().Count(col => col.IsPresent) == 2);
+            // Kumori hides non-practice gimmick mods, including the second upstream
+            // HD search match, while retaining the normal Hidden mod result.
+            AddAssert("one column visible", () => this.ChildrenOfType<ModColumn>().Count(col => col.IsPresent) == 1);
 
             AddStep("filter out everything", () => modSelectOverlay.SearchTerm = "Some long search term with no matches");
             AddAssert("no columns visible", () => this.ChildrenOfType<ModColumn>().All(col => !col.IsPresent));

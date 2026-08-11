@@ -11,6 +11,8 @@ $artifactsRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot 'artif
 $outputDirectory = [System.IO.Path]::GetFullPath((Join-Path $artifactsRoot 'standalone'))
 $destinationExecutable = Join-Path $repositoryRoot 'osu!.exe'
 
+& (Join-Path $PSScriptRoot 'Test-ReleaseMetadata.ps1')
+
 if (-not $outputDirectory.StartsWith($artifactsRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to clean unexpected output directory '$outputDirectory'."
 }
@@ -50,6 +52,8 @@ if (-not (Test-Path -LiteralPath $publishedExecutable -PathType Leaf)) {
 }
 
 Copy-Item -LiteralPath $publishedExecutable -Destination $destinationExecutable -Force
+
+& (Join-Path $PSScriptRoot 'Test-ReleaseMetadata.ps1') -ExecutablePath $destinationExecutable
 
 $executable = Get-Item -LiteralPath $destinationExecutable
 $hash = (Get-FileHash -LiteralPath $destinationExecutable -Algorithm SHA256).Hash.ToLowerInvariant()

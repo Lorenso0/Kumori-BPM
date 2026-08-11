@@ -9,7 +9,7 @@ using osu.Game.Online.API;
 
 namespace osu.Game.Online.Rooms
 {
-    public class CreateRoomScoreRequest : APIRequest<APIScoreToken>
+    public class CreateRoomScoreRequest : APIRequest<APIScoreToken>, IScoreSubmissionRequest
     {
         private readonly long roomId;
         private readonly long playlistItemId;

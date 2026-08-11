@@ -1168,8 +1168,7 @@ namespace osu.Game
                 Margin = new MarginPadding(5),
             }, topMostOverlayContent.Add);
 
-            if (!IsDeployedBuild)
-                loadComponentSingleFile(devBuildBanner = new DevBuildBanner(), ScreenContainer.Add);
+            loadComponentSingleFile(devBuildBanner = new DevBuildBanner(BPMCustomBuildPolicy.BUILD_BANNER_TEXT), ScreenContainer.Add);
 
             loadComponentSingleFile(osuLogo, _ =>
             {

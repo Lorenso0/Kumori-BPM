@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using osu.Framework.Audio;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics.Sprites;
@@ -25,6 +26,11 @@ namespace osu.Game.Rulesets.Mods
         private const double deep_pitch_adjust = 0.5;
         private const double minimum_supported_tempo = 0.05;
         private const double experimental_upper_rate = 4;
+        private const double recommended_minimum_tempo = 0.75;
+        private const double recommended_maximum_tempo = 1.5;
+        private const double extreme_minimum_audio_adjustment = 0.25;
+        private const double extreme_maximum_audio_adjustment = 4;
+        private const double large_pitch_shift_semitones = 8;
 
         public override string Name => "BPM Adjust";
         public override string Acronym => "BPM";
@@ -42,19 +48,24 @@ namespace osu.Game.Rulesets.Mods
         [SettingSource("Target BPM", "The primary BPM to play the selected map at", SettingControlType = typeof(SettingsBPMNumberBox))]
         public Bindable<double?> TargetBPM { get; } = new Bindable<double?>();
 
-        [SettingSource("Audio mode", "Choose how pitch responds to the BPM change")]
+        [SettingSource("Audio treatment", "Choose how pitch responds to the BPM change", SettingControlType = typeof(SettingsBPMAudioMode))]
         public Bindable<BPMAdjustAudioMode> AudioMode { get; } = new Bindable<BPMAdjustAudioMode>(BPMAdjustAudioMode.PreservePitch);
 
-        [SettingSource("Custom pitch", "Pitch shift in semitones used by the Custom Pitch audio mode")]
+        [SettingSource("Custom pitch", "Pitch shift in semitones used by the Custom Pitch audio treatment", Visible = false)]
         public BindableNumber<double> CustomPitchSemitones { get; } = new BindableDouble
         {
             MinValue = -12,
             MaxValue = 12,
-            Precision = 0.1,
+            // Fine enough to preserve the exact pitch of legacy fixed-frequency presets.
+            // The editor still exposes 0.1-semitone keyboard steps and a compact display.
+            Precision = 0.0001,
         };
 
-        [SettingSource("Beat accents", "Add beat-synchronised percussion independently of the pitch mode")]
+        [SettingSource("Beat accents", "Add beat-synchronised percussion independently of the pitch mode", SettingControlType = typeof(SettingsBPMBeatAccentMode))]
         public Bindable<BPMAdjustBeatAccentMode> BeatAccents { get; } = new Bindable<BPMAdjustBeatAccentMode>(BPMAdjustBeatAccentMode.Automatic);
+
+        [SettingSource("Hitsound pitch", "Choose whether gameplay hitsounds follow the playback rate, music pitch, or keep their original pitch")]
+        public Bindable<BPMAdjustHitsoundMode> HitsoundMode { get; } = new Bindable<BPMAdjustHitsoundMode>(BPMAdjustHitsoundMode.FollowPlaybackRate);
 
         [SettingSource("Scale map stats with BPM", "Scale rate-sensitive map stats such as AR and OD, like Double Time and Half Time")]
         public BindableBool ScaleMapStatsWithBPM { get; } = new BindableBool(true);
@@ -77,8 +88,48 @@ namespace osu.Game.Rulesets.Mods
 
         public bool RateWasLimited { get; private set; }
 
+        /// <summary>
+        /// Returns the currently effective audio and timing values for display in configuration UI.
+        /// </summary>
+        public BPMAdjustPreview CreatePreview(double originalLength = 0)
+        {
+            double adjustedLength = originalLength > 0 && double.IsFinite(originalLength)
+                ? originalLength / SpeedChange.Value
+                : 0;
+
+            double pitchSemitones = frequencyAdjust.Value > 0
+                ? 12 * Math.Log2(frequencyAdjust.Value)
+                : 0;
+
+            bool heavyTimeStretching = tempoAdjust.Value < recommended_minimum_tempo || tempoAdjust.Value > recommended_maximum_tempo;
+            bool largePitchShift = Math.Abs(pitchSemitones) > large_pitch_shift_semitones;
+            bool extremeProcessing = frequencyAdjust.Value < extreme_minimum_audio_adjustment
+                                     || frequencyAdjust.Value > extreme_maximum_audio_adjustment
+                                     || tempoAdjust.Value < extreme_minimum_audio_adjustment
+                                     || tempoAdjust.Value > extreme_maximum_audio_adjustment;
+
+            return new BPMAdjustPreview(
+                SourceBPM,
+                TargetBPM.Value,
+                SpeedChange.Value,
+                frequencyAdjust.Value,
+                tempoAdjust.Value,
+                pitchSemitones,
+                originalLength,
+                adjustedLength,
+                ScaleMapStatsWithBPM.Value,
+                AudioFallbackActive,
+                RateWasLimited || extremeProcessing || SpeedChange.Value > experimental_upper_rate,
+                heavyTimeStretching,
+                largePitchShift);
+        }
+
         private readonly BindableNumber<double> tempoAdjust = new BindableDouble(1);
         private readonly BindableNumber<double> frequencyAdjust = new BindableDouble(1);
+
+        private IAdjustableAudioComponent? track;
+        private bool frequencyAdjustmentAttached;
+        private bool tempoAdjustmentAttached;
 
         protected ModBPMAdjust()
         {
@@ -112,10 +163,13 @@ namespace osu.Game.Rulesets.Mods
 
         public override void ApplyToTrack(IAdjustableAudioComponent track)
         {
-            // Both adjustments stay attached so changing audio mode in song select is instantaneous.
-            // An adjustment value of 1 has no effect.
-            track.AddAdjustment(AdjustableProperty.Frequency, frequencyAdjust);
-            track.AddAdjustment(AdjustableProperty.Tempo, tempoAdjust);
+            if (ReferenceEquals(this.track, track))
+                return;
+
+            detachAudioAdjustments();
+
+            this.track = track;
+            synchroniseAudioAdjustments();
         }
 
         public override IEnumerable<(LocalisableString setting, LocalisableString value)> SettingDescription
@@ -136,6 +190,9 @@ namespace osu.Game.Rulesets.Mods
                 if (!BeatAccents.IsDefault)
                     yield return ("Beat accents", BeatAccents.Value.ToString());
 
+                if (!HitsoundMode.IsDefault)
+                    yield return ("Hitsound pitch", getHitsoundModeName(HitsoundMode.Value));
+
                 if (!ScaleMapStatsWithBPM.Value)
                     yield return ("Map stats", "Unscaled");
 
@@ -144,8 +201,17 @@ namespace osu.Game.Rulesets.Mods
 
                 if (RateWasLimited)
                     yield return ("Rate warning", "Limited to the nearest representable rate");
-                else if (SpeedChange.Value < minimum_supported_tempo || SpeedChange.Value > experimental_upper_rate)
-                    yield return ("Rate warning", "Extreme rate; audio may be unstable");
+                else
+                {
+                    BPMAdjustPreview preview = CreatePreview();
+
+                    if (preview.ExtremeRate)
+                        yield return ("Audio warning", "Extreme processing; audio may be unstable");
+                    else if (preview.HeavyTimeStretching)
+                        yield return ("Audio warning", "Heavy time stretching may reduce quality");
+                    else if (preview.LargePitchShift)
+                        yield return ("Audio warning", "Large pitch shift may reduce quality");
+                }
             }
         }
 
@@ -163,6 +229,73 @@ namespace osu.Game.Rulesets.Mods
             clone.setSourceBPM(SourceBPM);
 
             return clone;
+        }
+
+        public override void ApplyToSample(IAdjustableAudioComponent sample)
+        {
+            switch (HitsoundMode.Value)
+            {
+                case BPMAdjustHitsoundMode.FollowPlaybackRate:
+                    sample.AddAdjustment(AdjustableProperty.Frequency, SpeedChange);
+                    break;
+
+                case BPMAdjustHitsoundMode.FollowMusicPitch:
+                    sample.AddAdjustment(AdjustableProperty.Frequency, frequencyAdjust);
+                    break;
+
+                case BPMAdjustHitsoundMode.PreservePitch:
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        /// <summary>
+        /// Converts treatments now represented by custom-pitch presets into the simplified editor controls.
+        /// Playback continues to understand the legacy values for old scores and replays which bypass the editor.
+        /// </summary>
+        public void MigrateLegacyAudioSettingsForEditor()
+        {
+            switch (AudioMode.Value)
+            {
+                case BPMAdjustAudioMode.Nightcore:
+                    migrateCustomPitch(nightcore_pitch_adjust, BPMAdjustBeatAccentMode.Nightcore);
+                    break;
+
+                case BPMAdjustAudioMode.NightcorePitchOnly:
+                    migrateCustomPitch(nightcore_pitch_adjust, BPMAdjustBeatAccentMode.Off);
+                    break;
+
+                case BPMAdjustAudioMode.Daycore:
+                    migrateCustomPitch(daycore_pitch_adjust);
+                    break;
+
+                case BPMAdjustAudioMode.Chipmunk:
+                    migrateCustomPitch(chipmunk_pitch_adjust);
+                    break;
+
+                case BPMAdjustAudioMode.Deep:
+                    migrateCustomPitch(deep_pitch_adjust);
+                    break;
+
+                case BPMAdjustAudioMode.PreservePitchWithAccents:
+                    if (BeatAccents.Value == BPMAdjustBeatAccentMode.Automatic)
+                        BeatAccents.Value = BPMAdjustBeatAccentMode.Nightcore;
+
+                    AudioMode.Value = BPMAdjustAudioMode.PreservePitch;
+                    break;
+            }
+
+            void migrateCustomPitch(double frequency, BPMAdjustBeatAccentMode? legacyAccents = null)
+            {
+                CustomPitchSemitones.Value = 12 * Math.Log2(frequency);
+
+                if (BeatAccents.Value == BPMAdjustBeatAccentMode.Automatic)
+                    BeatAccents.Value = legacyAccents ?? BPMAdjustBeatAccentMode.Off;
+
+                AudioMode.Value = BPMAdjustAudioMode.CustomPitch;
+            }
         }
 
         private void setSourceBPM(double bpm)
@@ -233,6 +366,11 @@ namespace osu.Game.Rulesets.Mods
                     tempo = frequency;
                     break;
 
+                case BPMAdjustAudioMode.Adaptive:
+                    tempo = Math.Clamp(SpeedChange.Value, recommended_minimum_tempo, recommended_maximum_tempo);
+                    frequency = SpeedChange.Value / tempo;
+                    break;
+
                 case BPMAdjustAudioMode.CustomPitch:
                     frequency = Math.Pow(2, CustomPitchSemitones.Value / 12);
                     tempo = SpeedChange.Value / frequency;
@@ -262,8 +400,74 @@ namespace osu.Game.Rulesets.Mods
                 AudioFallbackActive = true;
             }
 
+            bool requiresFrequencyAdjustment = !Precision.AlmostEquals(frequency, 1);
+            bool requiresTempoAdjustment = !Precision.AlmostEquals(tempo, 1);
+            bool bothAdjustmentsChanging = !Precision.AlmostEquals(frequencyAdjust.Value, frequency)
+                                           && !Precision.AlmostEquals(tempoAdjust.Value, tempo);
+
+            // Remove processors which are no longer required before updating their values.
+            // Keeping a neutral processor attached differs from lazer's built-in rate mods and,
+            // more importantly, briefly applies both the old and new rate during a mode switch.
+            // That transient state can underrun the low-latency WASAPI path and produce a crackle.
+            if (bothAdjustmentsChanging)
+            {
+                detachFrequencyAdjustment();
+                detachTempoAdjustment();
+            }
+
+            if (!requiresFrequencyAdjustment)
+                detachFrequencyAdjustment();
+
+            if (!requiresTempoAdjustment)
+                detachTempoAdjustment();
+
             frequencyAdjust.Value = frequency;
             tempoAdjust.Value = tempo;
+
+            synchroniseAudioAdjustments();
+        }
+
+        private void synchroniseAudioAdjustments()
+        {
+            if (track == null)
+                return;
+
+            if (!frequencyAdjustmentAttached && !Precision.AlmostEquals(frequencyAdjust.Value, 1))
+            {
+                track.AddAdjustment(AdjustableProperty.Frequency, frequencyAdjust);
+                frequencyAdjustmentAttached = true;
+            }
+
+            if (!tempoAdjustmentAttached && !Precision.AlmostEquals(tempoAdjust.Value, 1))
+            {
+                track.AddAdjustment(AdjustableProperty.Tempo, tempoAdjust);
+                tempoAdjustmentAttached = true;
+            }
+        }
+
+        private void detachAudioAdjustments()
+        {
+            detachFrequencyAdjustment();
+            detachTempoAdjustment();
+            track = null;
+        }
+
+        private void detachFrequencyAdjustment()
+        {
+            if (track == null || !frequencyAdjustmentAttached)
+                return;
+
+            track.RemoveAdjustment(AdjustableProperty.Frequency, frequencyAdjust);
+            frequencyAdjustmentAttached = false;
+        }
+
+        private void detachTempoAdjustment()
+        {
+            if (track == null || !tempoAdjustmentAttached)
+                return;
+
+            track.RemoveAdjustment(AdjustableProperty.Tempo, tempoAdjust);
+            tempoAdjustmentAttached = false;
         }
 
         private static string getAudioModeName(BPMAdjustAudioMode mode)
@@ -285,6 +489,9 @@ namespace osu.Game.Rulesets.Mods
                 case BPMAdjustAudioMode.Balanced:
                     return "Balanced";
 
+                case BPMAdjustAudioMode.Adaptive:
+                    return "Adaptive";
+
                 case BPMAdjustAudioMode.CustomPitch:
                     return "Custom Pitch";
 
@@ -299,6 +506,24 @@ namespace osu.Game.Rulesets.Mods
 
                 case BPMAdjustAudioMode.PreservePitchWithAccents:
                     return "Preserve Pitch + Accents";
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
+            }
+        }
+
+        private static string getHitsoundModeName(BPMAdjustHitsoundMode mode)
+        {
+            switch (mode)
+            {
+                case BPMAdjustHitsoundMode.FollowPlaybackRate:
+                    return "Follow playback rate";
+
+                case BPMAdjustHitsoundMode.FollowMusicPitch:
+                    return "Follow music pitch";
+
+                case BPMAdjustHitsoundMode.PreservePitch:
+                    return "Preserve pitch";
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
@@ -329,6 +554,21 @@ namespace osu.Game.Rulesets.Mods
             difficulty.OverallDifficulty = (float)IBeatmapDifficultyInfo.InverseDifficultyRange(greatHitWindow, greatWindowRange);
         }
     }
+
+    public readonly record struct BPMAdjustPreview(
+        double SourceBPM,
+        double? TargetBPM,
+        double Rate,
+        double FrequencyAdjustment,
+        double TempoAdjustment,
+        double PitchSemitones,
+        double OriginalLength,
+        double AdjustedLength,
+        bool ScaleMapStats,
+        bool AudioFallbackActive,
+        bool ExtremeRate,
+        bool HeavyTimeStretching,
+        bool LargePitchShift);
 
     public abstract partial class ModBPMAdjust<TObject> : ModBPMAdjust, IApplicableToDrawableRuleset<TObject>
         where TObject : HitObject
@@ -367,16 +607,30 @@ namespace osu.Game.Rulesets.Mods
 
     public enum BPMAdjustAudioMode
     {
+        [Description("Preserve Pitch")]
         PreservePitch,
+
+        [Description("Adjust Pitch")]
         AdjustPitch,
+
         Nightcore,
         Daycore,
+
         Balanced,
+
+        [Description("Custom Pitch")]
         CustomPitch,
+
         Chipmunk,
         Deep,
+
+        [Description("Nightcore Pitch Only")]
         NightcorePitchOnly,
+
+        [Description("Preserve Pitch + Accents")]
         PreservePitchWithAccents,
+
+        Adaptive,
     }
 
     public enum BPMAdjustBeatAccentMode
@@ -385,5 +639,17 @@ namespace osu.Game.Rulesets.Mods
         Off,
         Nightcore,
         Metronome,
+    }
+
+    public enum BPMAdjustHitsoundMode
+    {
+        [Description("Follow Playback Rate")]
+        FollowPlaybackRate,
+
+        [Description("Follow Music Pitch")]
+        FollowMusicPitch,
+
+        [Description("Preserve Pitch")]
+        PreservePitch,
     }
 }

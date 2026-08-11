@@ -9,6 +9,7 @@ using osu.Framework.Extensions.TypeExtensions;
 using osu.Framework.IO.Network;
 using osu.Framework.Logging;
 using osu.Game.Extensions;
+using osu.Game.Customisation;
 using osu.Game.Online.API.Requests.Responses;
 
 namespace osu.Game.Online.API
@@ -121,6 +122,12 @@ namespace osu.Game.Online.API
             if (API == null)
             {
                 Fail(new NotSupportedException($"A {nameof(APIAccess)} is required to perform requests."));
+                return;
+            }
+
+            if (this is IScoreSubmissionRequest && !BPMCustomBuildPolicy.ScoreSubmissionEnabled)
+            {
+                Fail(new NotSupportedException("Official score submission is disabled in Kumori."));
                 return;
             }
 

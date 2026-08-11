@@ -1,7 +1,9 @@
 ﻿<!-- Contains required properties for osu!framework projects. -->
 <Project>
   <PropertyGroup Label="Kumori Release">
-    <KumoriVersion>2026.804.2-kumori.1</KumoriVersion>
+    <UpstreamVersion>2026.804.2</UpstreamVersion>
+    <KumoriRevision>2</KumoriRevision>
+    <KumoriVersion>$(UpstreamVersion)-kumori.$(KumoriRevision)</KumoriVersion>
   </PropertyGroup>
   <PropertyGroup Label="C#">
     <LangVersion>12.0</LangVersion>

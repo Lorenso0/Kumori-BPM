@@ -13,10 +13,14 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $releasePropertyGroup = @($buildProperties.Project.PropertyGroup) |
                         Where-Object { $_.Label -eq 'Kumori Release' } |
                         Select-Object -First 1
-if ($null -eq $releasePropertyGroup -or $null -eq $releasePropertyGroup.KumoriVersion) {
-    throw 'Directory.Build.props does not define KumoriVersion in the Kumori Release property group.'
+if ($null -eq $releasePropertyGroup -or $null -eq $releasePropertyGroup.UpstreamVersion -or $null -eq $releasePropertyGroup.KumoriRevision) {
+    throw 'Directory.Build.props does not define UpstreamVersion and KumoriRevision in the Kumori Release property group.'
 }
-$configuredVersion = ([string] $releasePropertyGroup.KumoriVersion).Trim()
+$upstreamVersion = ([string] $releasePropertyGroup.UpstreamVersion).Trim()
+$kumoriRevision = ([string] $releasePropertyGroup.KumoriRevision).Trim()
+$configuredVersion = "$upstreamVersion-kumori.$kumoriRevision"
+
+& (Join-Path $PSScriptRoot 'Test-ReleaseMetadata.ps1')
 
 if ([string]::IsNullOrWhiteSpace($ReleaseVersion)) {
     $ReleaseVersion = $configuredVersion
@@ -68,6 +72,8 @@ if ($NoRestore) {
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE."
 }
+
+& (Join-Path $PSScriptRoot 'Test-ReleaseMetadata.ps1') -ExecutablePath (Join-Path $stageDirectory 'osu!.exe')
 
 Get-ChildItem -LiteralPath $stageDirectory -Recurse -File |
     Where-Object { $_.Extension -in @('.pdb', '.xml') } |

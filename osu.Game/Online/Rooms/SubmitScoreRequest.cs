@@ -10,7 +10,7 @@ using osu.Game.Scoring;
 
 namespace osu.Game.Online.Rooms
 {
-    public abstract class SubmitScoreRequest : APIRequest<MultiplayerScore>
+    public abstract class SubmitScoreRequest : APIRequest<MultiplayerScore>, IScoreSubmissionRequest
     {
         public readonly SoloScoreInfo Score;
 

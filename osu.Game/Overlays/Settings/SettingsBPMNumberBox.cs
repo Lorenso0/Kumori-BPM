@@ -16,10 +16,13 @@ using osu.Framework.Input;
 using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osu.Game.Configuration;
+using osu.Game.Beatmaps;
+using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Screens.Select;
+using osu.Game.Rulesets.Mods;
 using osuTK;
 using CommonStrings = osu.Game.Resources.Localisation.Web.CommonStrings;
 
@@ -39,7 +42,7 @@ namespace osu.Game.Overlays.Settings
             Depth = -1;
         }
 
-        protected override Drawable CreateControl() => new BPMNumberControl
+        protected override Drawable CreateControl() => new BPMNumberControl(() => SettingSourceObject as ModBPMAdjust)
         {
             RelativeSizeAxes = Axes.X,
         };
@@ -75,13 +78,21 @@ namespace osu.Game.Overlays.Settings
             private RoundedButton calculateMapsButton = null!;
             private RoundedButton cancelCalculationButton = null!;
             private OsuSpriteText calculationProgressText = null!;
+            private OsuSpriteText previewText = null!;
             private RoundedButton? addPresetButton;
             private Bindable<string>? presetStorage;
             private bool updatingFromText;
             private bool updatingSlider;
+            private string lastPreview = string.Empty;
 
-            public BPMNumberControl()
+            private readonly Func<ModBPMAdjust?> getMod;
+
+            [Resolved(canBeNull: true)]
+            private IBindable<WorkingBeatmap>? workingBeatmap { get; set; }
+
+            public BPMNumberControl(Func<ModBPMAdjust?> getMod)
             {
+                this.getMod = getMod;
                 AutoSizeAxes = Axes.Y;
 
                 InternalChild = new FillFlowContainer
@@ -133,6 +144,12 @@ namespace osu.Game.Overlays.Settings
                                     },
                                 }
                             }
+                        },
+                        previewText = new OsuSpriteText
+                        {
+                            RelativeSizeAxes = Axes.X,
+                            Font = OsuFont.Default.With(size: 13),
+                            Text = "Select a beatmap to preview the BPM change.",
                         },
                         presetsFlow = new FillFlowContainer
                         {
@@ -334,6 +351,64 @@ namespace osu.Game.Overlays.Settings
                     calculationController.ProgressChanged += updateCalculationControls;
 
                 updateCalculationControls();
+            }
+
+            protected override void Update()
+            {
+                base.Update();
+
+                string preview = createPreviewText();
+                if (preview == lastPreview)
+                    return;
+
+                lastPreview = preview;
+                previewText.Text = preview;
+            }
+
+            private string createPreviewText()
+            {
+                ModBPMAdjust? mod = getMod();
+                WorkingBeatmap? beatmap = workingBeatmap?.Value;
+
+                if (mod == null || beatmap == null || !BPMResolver.IsValid(mod.SourceBPM))
+                    return "Select a beatmap to preview the BPM change.";
+
+                BPMAdjustPreview preview = mod.CreatePreview(beatmap.BeatmapInfo.Length);
+                string target = preview.TargetBPM is double bpm ? $"{bpm:0.##}" : "neutral";
+                string duration = preview.OriginalLength > 0
+                    ? $" | {formatDuration(preview.OriginalLength)} -> {formatDuration(preview.AdjustedLength)}"
+                    : string.Empty;
+                string warning = preview.AudioFallbackActive
+                    ? " | frequency fallback"
+                    : preview.ExtremeRate
+                        ? " | extreme processing"
+                        : preview.HeavyTimeStretching
+                            ? " | heavy time stretching"
+                            : preview.LargePitchShift ? " | large pitch shift" : " | clean";
+                string variableRange = getVariableBPMRange(beatmap, preview.Rate);
+
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"{preview.SourceBPM:0.##} -> {target} BPM | {preview.Rate:0.####}x{duration}\nPitch {preview.PitchSemitones:+0.##;-0.##;0} st | tempo {preview.TempoAdjustment:0.####}x | stats {(preview.ScaleMapStats ? "scaled" : "preserved")}{variableRange}{warning}");
+            }
+
+            private static string getVariableBPMRange(WorkingBeatmap beatmap, double rate)
+            {
+                if (!beatmap.BeatmapLoaded)
+                    return string.Empty;
+
+                double minimum = beatmap.Beatmap.ControlPointInfo.BPMMinimum;
+                double maximum = beatmap.Beatmap.ControlPointInfo.BPMMaximum;
+
+                if (!BPMResolver.IsValid(minimum) || !BPMResolver.IsValid(maximum) || Math.Abs(maximum - minimum) < 0.01)
+                    return string.Empty;
+
+                return FormattableString.Invariant($" | range {minimum:0.##}-{maximum:0.##} -> {minimum * rate:0.##}-{maximum * rate:0.##}");
+            }
+
+            private static string formatDuration(double milliseconds)
+            {
+                var duration = TimeSpan.FromMilliseconds(Math.Clamp(milliseconds, 0, TimeSpan.MaxValue.TotalMilliseconds));
+                return duration.TotalHours >= 1 ? duration.ToString(@"h\:mm\:ss") : duration.ToString(@"m\:ss");
             }
 
             private void updateCalculationControls()

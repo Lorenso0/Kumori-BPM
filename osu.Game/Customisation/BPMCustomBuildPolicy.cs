@@ -38,6 +38,7 @@ namespace osu.Game.Customisation
         };
 
         public const string ISOLATED_PROFILE_ARGUMENT = "--bpm-isolated";
+        public const string SHARED_PROFILE_ARGUMENT = "--bpm-shared-profile";
         public const string ISOLATED_GAME_NAME = "osu-bpm";
         public const string UPDATE_REPOSITORY_URL = "https://github.com/Lorenso0/Kumori-BPM";
         public const string UPDATE_RELEASES_URL = UPDATE_REPOSITORY_URL + "/releases/latest";
@@ -46,7 +47,14 @@ namespace osu.Game.Customisation
         public static bool SelfUpdatesEnabled => true;
         public static bool OnlineChatEnabled => true;
         public static bool OnlineBeatmapAccessEnabled => true;
+        public static bool OnlineFriendsListEnabled => true;
+        public static bool RealtimeOnlineEnabled => false;
         public static bool ScoreSubmissionEnabled => false;
+
+        public const string BUILD_BANNER_TEXT = "KUMORI CUSTOM BUILD";
+
+        public const string CUSTOM_BUILD_NOTICE =
+            "Kumori is an unofficial local-only build. Official score submission, realtime presence, multiplayer, and spectating are disabled; login, chat, beatmap browsing, and downloads remain available.";
 
         public static bool CanSubmitScore(IReadOnlyList<Mod> mods) => ScoreSubmissionEnabled;
 

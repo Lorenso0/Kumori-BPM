@@ -3,12 +3,17 @@
 
 using System.Linq;
 using NUnit.Framework;
+using osu.Game.Beatmaps;
 using osu.Game.Customisation;
+using osu.Game.Online.API;
+using osu.Game.Online.Rooms;
+using osu.Game.Online.Solo;
 using osu.Game.Rulesets.Catch;
 using osu.Game.Rulesets.Catch.Mods;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Rulesets.Osu.Mods;
+using osu.Game.Scoring;
 
 namespace osu.Game.Tests.NonVisual
 {
@@ -22,8 +27,36 @@ namespace osu.Game.Tests.NonVisual
             {
                 Assert.That(BPMCustomBuildPolicy.OnlineChatEnabled, Is.True);
                 Assert.That(BPMCustomBuildPolicy.OnlineBeatmapAccessEnabled, Is.True);
+                Assert.That(BPMCustomBuildPolicy.OnlineFriendsListEnabled, Is.True);
+                Assert.That(BPMCustomBuildPolicy.RealtimeOnlineEnabled, Is.False);
                 Assert.That(BPMCustomBuildPolicy.CanSubmitScore(System.Array.Empty<Mod>()), Is.False);
             });
+        }
+
+        [Test]
+        public void TestEveryOfficialScoreRequestIsMarkedForApiBoundaryBlocking()
+        {
+            var beatmap = new BeatmapInfo { OnlineID = 1 };
+            var score = new ScoreInfo();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(new CreateSoloScoreRequest(beatmap, 0, "hash"), Is.InstanceOf<IScoreSubmissionRequest>());
+                Assert.That(new SubmitSoloScoreRequest(score, 1, 1), Is.InstanceOf<IScoreSubmissionRequest>());
+                Assert.That(new CreateRoomScoreRequest(1, 1, beatmap, 0, "hash"), Is.InstanceOf<IScoreSubmissionRequest>());
+                Assert.That(new SubmitRoomScoreRequest(score, 1, 1, 1), Is.InstanceOf<IScoreSubmissionRequest>());
+            });
+        }
+
+        [Test]
+        public void TestScoreRequestFailsBeforeCreatingNetworkRequest()
+        {
+            var request = new CreateSoloScoreRequest(new BeatmapInfo { OnlineID = 1 }, 0, "hash");
+            request.AttachAPI(new DummyAPIAccess());
+
+            request.Perform();
+
+            Assert.That(request.CompletionState, Is.EqualTo(APIRequestCompletionState.Failed));
         }
 
         [Test]

@@ -13,6 +13,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Logging;
 using osu.Game.Configuration;
+using osu.Game.Customisation;
 using osu.Game.Graphics;
 using osu.Game.Localisation;
 using osu.Game.Online.Multiplayer;
@@ -64,13 +65,13 @@ namespace osu.Game.Updater
 
                 // notify the user if they're using a build that is not officially sanctioned.
                 if (RuntimeInfo.EntryAssembly.GetCustomAttribute<OfficialBuildAttribute>() == null)
-                    Notifications.Post(new SimpleNotification { Text = NotificationsStrings.NotOfficialBuild });
+                    Notifications.Post(new SimpleNotification { Text = BPMCustomBuildPolicy.CUSTOM_BUILD_NOTICE });
             }
             else
             {
                 // log that this is not an official build, for if users build their own game without an assembly version.
                 // this is only logged because a notification would be too spammy in local test builds.
-                Logger.Log(NotificationsStrings.NotOfficialBuild.ToString());
+                Logger.Log(BPMCustomBuildPolicy.CUSTOM_BUILD_NOTICE);
             }
 
             config.BindWith(OsuSetting.ReleaseStream, releaseStream);

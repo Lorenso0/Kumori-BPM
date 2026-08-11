@@ -1,0 +1,145 @@
+name: Update from upstream lazer
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *'
+
+concurrency:
+  group: kumori-upstream-release
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+
+jobs:
+  update:
+    name: Merge, validate, tag, and dispatch release
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Kumori with full history
+        uses: actions/checkout@v6
+        with:
+          ref: kumori
+          fetch-depth: 0
+
+      - name: Find latest official lazer release
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = gh api repos/ppy/osu/releases --paginate `
+            --jq '.[] | select(.draft == false and .prerelease == false and (.tag_name | endswith("-lazer"))) | .tag_name' |
+            Select-Object -First 1
+
+          if ([string]::IsNullOrWhiteSpace($tag) -or $tag -notmatch '^\d{4}\.\d+\.\d+-lazer$') {
+            throw "Could not determine the latest official lazer release tag."
+          }
+
+          [xml] $props = Get-Content Directory.Build.props
+          $releaseProperties = @($props.Project.PropertyGroup) |
+                               Where-Object { $_.Label -eq 'Kumori Release' } |
+                               Select-Object -First 1
+          $current = ([string] $releaseProperties.UpstreamVersion).Trim()
+          $version = $tag -replace '-lazer$', ''
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "update=$($current -ne $version)".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+
+      - name: Fetch and merge official tag
+        if: steps.latest.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_TAG: ${{ steps.latest.outputs.tag }}
+        shell: pwsh
+        run: |
+          git remote add upstream-auto https://github.com/ppy/osu.git
+          git fetch upstream-auto "refs/tags/$env:UPSTREAM_TAG`:refs/tags/$env:UPSTREAM_TAG"
+          git config user.name "kumori-updater[bot]"
+          git config user.email "kumori-updater[bot]@users.noreply.github.com"
+
+          git merge --no-ff --no-commit $env:UPSTREAM_TAG
+          if ($LASTEXITCODE -ne 0) {
+            $conflicts = @(git diff --name-only --diff-filter=U)
+            git merge --abort
+
+            $title = "Upstream update blocked: $env:UPSTREAM_TAG"
+            $existing = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
+            if ([string]::IsNullOrWhiteSpace($existing)) {
+              $body = "The automatic merge of ppy/osu $env:UPSTREAM_TAG conflicted and was not released.`n`nConflicting files:`n- " + ($conflicts -join "`n- ")
+              gh issue create --title $title --body $body
+            }
+
+            throw "Automatic upstream merge conflicted."
+          }
+
+          ./scripts/Update-UpstreamRelease.ps1 -UpstreamTag $env:UPSTREAM_TAG
+          git add --all
+          git commit -m "Update Kumori to osu! $env:UPSTREAM_TAG"
+
+      - name: Install pinned .NET SDK
+        if: steps.latest.outputs.update == 'true'
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            **/*.props
+            global.json
+
+      - name: Restore
+        if: steps.latest.outputs.update == 'true'
+        run: |
+          dotnet tool restore
+          dotnet restore osu.Desktop.slnf
+          dotnet restore osu.Desktop/osu.Desktop.csproj -r win-x64
+
+      - name: Build and test merged client
+        if: steps.latest.outputs.update == 'true'
+        run: |
+          dotnet build osu.Desktop.slnf -c Release --no-restore -warnaserror
+          dotnet test osu.Game.Tests/osu.Game.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ModBPMAdjust|FullyQualifiedName~BPMCustomBuildPolicy"
+          dotnet test osu.Game.Rulesets.Osu.Tests/osu.Game.Rulesets.Osu.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~ModBPMAdjust"
+
+      - name: Audit release package
+        if: steps.latest.outputs.update == 'true'
+        shell: pwsh
+        run: ./scripts/Publish-Release.ps1 -NoRestore
+
+      - name: Push validated merge and release tag
+        if: steps.latest.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.latest.outputs.version }}
+        shell: pwsh
+        run: |
+          $releaseVersion = "$env:VERSION-kumori.1"
+          git push origin HEAD:kumori
+          git tag -a $releaseVersion -m "Kumori $releaseVersion"
+          git push origin $releaseVersion
+          gh workflow run release.yml --ref kumori -f release_version=$releaseVersion
+
+      - name: No update required
+        if: steps.latest.outputs.update != 'true'
+        run: echo "Kumori already matches the latest official lazer release."
+
+      - name: Report failed automatic update
+        if: failure() && steps.latest.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_TAG: ${{ steps.latest.outputs.tag }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          $title = "Automatic upstream update failed: $env:UPSTREAM_TAG"
+          $existing = gh issue list --state open --search "`"$title`" in:title" --json number --jq '.[0].number'
+          if ([string]::IsNullOrWhiteSpace($existing)) {
+            gh issue create --title $title --body "The automatic update did not publish because merge, validation, packaging, push, or release dispatch failed. Review the workflow run: $env:RUN_URL"
+          }

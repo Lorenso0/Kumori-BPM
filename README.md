@@ -17,12 +17,15 @@ The **BPM Adjust (BPM)** mod appears in the Fun category for osu!, taiko,
 catch, and mania. It can:
 
 - Set a target BPM which is recalculated for each selected beatmap.
-- Choose from pitch-preserving, speed-linked, Nightcore, Daycore, Balanced,
-  custom-semitone, Chipmunk, and Deep audio treatments.
-- Add optional Nightcore percussion or a simple metronome independently of pitch.
+- Choose a distinct Preserve Pitch, Adjust Pitch, Balanced, Adaptive, or Custom
+  Pitch treatment, with Nightcore, Daycore, Chipmunk, and Deep pitch presets.
+- Add explicit Nightcore percussion or a metronome independently of pitch.
+- Choose whether hitsounds follow playback speed, the music pitch, or preserve pitch.
 - Optionally preserve the map's real-time AR and OD behavior.
 - Save reusable BPM presets.
 - Store its settings in local scores and replays.
+- Preview the effective rate, duration, pitch, tempo processing, audio-quality
+  risk, stat behavior, and variable-BPM range before playing.
 
 See [BPM_MOD.md](BPM_MOD.md) for detailed behavior, limitations, and safety
 information.
@@ -33,7 +36,11 @@ Kumori is an unranked custom client:
 
 - Official score submission is disabled for the entire build.
 - BPM Adjust is unavailable in multiplayer.
-- Login, chat, beatmap browsing, downloads, and leaderboards remain enabled.
+- Login, chat, the friends list, beatmap browsing, downloads, and leaderboards
+  remain enabled.
+- Official realtime presence, multiplayer, and spectating are disabled because
+  ppy's realtime service does not accept custom executable hashes. Friends will
+  not see Kumori sessions as online.
 - Installer and Velopack portable builds update from Kumori's GitHub releases.
 
 ## Installing
@@ -53,11 +60,15 @@ legacy manual-update archive.
 
 The releases are unsigned, so Windows SmartScreen may display a warning.
 
-By default Kumori uses lazer's normal `osu` data profile. Do not run official
-lazer and Kumori simultaneously, and back up the lazer data directory before
-switching between substantially different client versions.
+Kumori uses its isolated `osu-bpm` data profile by default, preventing database
+conflicts with official lazer. Existing users who intentionally want to continue
+using the shared official profile can launch with:
 
-For an isolated profile:
+```powershell
+& ".\Kumori BPM.exe" --bpm-shared-profile
+```
+
+The old explicit isolated option remains accepted for shortcuts and scripts:
 
 ```powershell
 & ".\Kumori BPM.exe" --bpm-isolated
@@ -87,10 +98,12 @@ feed, and full/delta update packages.
 
 ## Maintaining the fork
 
-The canonical upstream remote should be named `upstream`. For a new lazer
-release, create a branch from the matching upstream tag, replay the Kumori
-commits, resolve conflicts, update `KumoriVersion`, and rerun the full release
-validation.
+The scheduled `Update from upstream lazer` workflow checks ppy's official
+GitHub releases daily. A new `-lazer` tag is merged, release metadata is updated,
+and the complete build/test/package audit runs before the `kumori` branch and
+matching `-kumori.1` tag are pushed. A successful update dispatches the release
+workflow automatically. Merge conflicts create an issue and never publish an
+unverified build.
 
 Do not re-enable ppy's production deployment, NuGet publishing, Sentry, or
 internal infrastructure workflows in this fork.

@@ -130,6 +130,7 @@ namespace osu.Game.Tests.Mods
             assertMode(BPMAdjustAudioMode.Nightcore, 1.5, 4.0 / 3);
             assertMode(BPMAdjustAudioMode.Daycore, 0.75, 8.0 / 3);
             assertMode(BPMAdjustAudioMode.Balanced, Math.Sqrt(2), Math.Sqrt(2));
+            assertMode(BPMAdjustAudioMode.Adaptive, 4.0 / 3, 1.5);
 
             mod.CustomPitchSemitones.Value = 7;
             double customFrequency = Math.Pow(2, 7.0 / 12);
@@ -171,6 +172,106 @@ namespace osu.Game.Tests.Mods
                     Assert.That(mod.AudioFallbackActive, Is.False, mode.ToString());
                 });
             }
+        }
+
+        [Test]
+        public void TestAdaptivePreservesPitchInsideRecommendedRange()
+        {
+            var mod = new OsuModBPMAdjust
+            {
+                AudioMode = { Value = BPMAdjustAudioMode.Adaptive }
+            };
+            mod.ApplyToBeatmapInfo(new BeatmapInfo { BPM = 120 });
+            mod.TargetBPM.Value = 144;
+
+            BPMAdjustPreview preview = mod.CreatePreview();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(preview.Rate, Is.EqualTo(1.2).Within(1e-12));
+                Assert.That(preview.FrequencyAdjustment, Is.EqualTo(1));
+                Assert.That(preview.TempoAdjustment, Is.EqualTo(1.2).Within(1e-12));
+                Assert.That(preview.HeavyTimeStretching, Is.False);
+                Assert.That(preview.LargePitchShift, Is.False);
+            });
+        }
+
+        [Test]
+        public void TestHitsoundPitchModes()
+        {
+            var mod = new OsuModBPMAdjust();
+            mod.ApplyToBeatmapInfo(new BeatmapInfo { BPM = 120 });
+            mod.TargetBPM.Value = 240;
+            mod.CustomPitchSemitones.Value = 7;
+            mod.AudioMode.Value = BPMAdjustAudioMode.CustomPitch;
+
+            assertHitsoundMode(BPMAdjustHitsoundMode.FollowPlaybackRate, 2);
+            assertHitsoundMode(BPMAdjustHitsoundMode.FollowMusicPitch, Math.Pow(2, 7.0 / 12));
+            assertHitsoundMode(BPMAdjustHitsoundMode.PreservePitch, 1);
+
+            void assertHitsoundMode(BPMAdjustHitsoundMode mode, double expectedFrequency)
+            {
+                mod.HitsoundMode.Value = mode;
+                var sample = new AudioAdjustments();
+                mod.ApplyToSample(sample);
+                Assert.That(sample.AggregateFrequency.Value, Is.EqualTo(expectedFrequency).Within(1e-12), mode.ToString());
+            }
+        }
+
+        [Test]
+        public void TestLegacyAudioModesMigrateWithoutChangingPlaybackIntent()
+        {
+            var nightcore = new OsuModBPMAdjust
+            {
+                AudioMode = { Value = BPMAdjustAudioMode.Nightcore }
+            };
+
+            nightcore.MigrateLegacyAudioSettingsForEditor();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(nightcore.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.CustomPitch));
+                Assert.That(nightcore.CustomPitchSemitones.Value, Is.EqualTo(12 * Math.Log2(1.5)).Within(0.0001));
+                Assert.That(nightcore.BeatAccents.Value, Is.EqualTo(BPMAdjustBeatAccentMode.Nightcore));
+            });
+
+            var explicitAccents = new OsuModBPMAdjust
+            {
+                AudioMode = { Value = BPMAdjustAudioMode.Daycore },
+                BeatAccents = { Value = BPMAdjustBeatAccentMode.Metronome }
+            };
+
+            explicitAccents.MigrateLegacyAudioSettingsForEditor();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(explicitAccents.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.CustomPitch));
+                Assert.That(explicitAccents.CustomPitchSemitones.Value, Is.EqualTo(12 * Math.Log2(0.75)).Within(0.0001));
+                Assert.That(explicitAccents.BeatAccents.Value, Is.EqualTo(BPMAdjustBeatAccentMode.Metronome));
+            });
+        }
+
+        [Test]
+        public void TestAudioAdjustmentsMoveToReplacementTrack()
+        {
+            var mod = new OsuModBPMAdjust();
+            mod.ApplyToBeatmapInfo(new BeatmapInfo { BPM = 120 });
+            mod.TargetBPM.Value = 240;
+
+            var oldTrack = new AudioAdjustments();
+            var newTrack = new AudioAdjustments();
+
+            mod.ApplyToTrack(oldTrack);
+            mod.ApplyToTrack(newTrack);
+            mod.TargetBPM.Value = 180;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(oldTrack.AggregateFrequency.Value, Is.EqualTo(1));
+                Assert.That(oldTrack.AggregateTempo.Value, Is.EqualTo(1));
+                Assert.That(newTrack.AggregateFrequency.Value, Is.EqualTo(1));
+                Assert.That(newTrack.AggregateTempo.Value, Is.EqualTo(1.5).Within(1e-12));
+            });
         }
 
         [Test]
@@ -304,6 +405,7 @@ namespace osu.Game.Tests.Mods
                 AudioMode = { Value = BPMAdjustAudioMode.Nightcore },
                 CustomPitchSemitones = { Value = 3.5 },
                 BeatAccents = { Value = BPMAdjustBeatAccentMode.Metronome },
+                HitsoundMode = { Value = BPMAdjustHitsoundMode.FollowMusicPitch },
                 ScaleMapStatsWithBPM = { Value = false }
             };
             original.ApplyToBeatmapInfo(new BeatmapInfo { BPM = 128 });
@@ -326,11 +428,13 @@ namespace osu.Game.Tests.Mods
                 Assert.That(clone.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.Nightcore));
                 Assert.That(clone.CustomPitchSemitones.Value, Is.EqualTo(3.5));
                 Assert.That(clone.BeatAccents.Value, Is.EqualTo(BPMAdjustBeatAccentMode.Metronome));
+                Assert.That(clone.HitsoundMode.Value, Is.EqualTo(BPMAdjustHitsoundMode.FollowMusicPitch));
                 Assert.That(clone.ScaleMapStatsWithBPM.Value, Is.False);
                 Assert.That(deserialised.TargetBPM.Value, Is.EqualTo(174.5));
                 Assert.That(deserialised.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.Nightcore));
                 Assert.That(deserialised.CustomPitchSemitones.Value, Is.EqualTo(3.5));
                 Assert.That(deserialised.BeatAccents.Value, Is.EqualTo(BPMAdjustBeatAccentMode.Metronome));
+                Assert.That(deserialised.HitsoundMode.Value, Is.EqualTo(BPMAdjustHitsoundMode.FollowMusicPitch));
                 Assert.That(deserialised.ScaleMapStatsWithBPM.Value, Is.False);
                 Assert.That(deserialised.Acronym, Is.EqualTo("BPM"));
                 Assert.That(deserialised.Icon, Is.Null);
@@ -339,6 +443,7 @@ namespace osu.Game.Tests.Mods
                 Assert.That(presetMod.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.Nightcore));
                 Assert.That(presetMod.CustomPitchSemitones.Value, Is.EqualTo(3.5));
                 Assert.That(presetMod.BeatAccents.Value, Is.EqualTo(BPMAdjustBeatAccentMode.Metronome));
+                Assert.That(presetMod.HitsoundMode.Value, Is.EqualTo(BPMAdjustHitsoundMode.FollowMusicPitch));
                 Assert.That(presetMod.ScaleMapStatsWithBPM.Value, Is.False);
             });
 
@@ -350,6 +455,7 @@ namespace osu.Game.Tests.Mods
                 Assert.That(original.AudioMode.Value, Is.EqualTo(BPMAdjustAudioMode.PreservePitch));
                 Assert.That(original.CustomPitchSemitones.Value, Is.Zero);
                 Assert.That(original.BeatAccents.Value, Is.EqualTo(BPMAdjustBeatAccentMode.Automatic));
+                Assert.That(original.HitsoundMode.Value, Is.EqualTo(BPMAdjustHitsoundMode.FollowPlaybackRate));
                 Assert.That(original.ScaleMapStatsWithBPM.Value, Is.True);
                 Assert.That(original.SpeedChange.Value, Is.EqualTo(1));
             });
@@ -417,6 +523,29 @@ namespace osu.Game.Tests.Mods
             {
                 Assert.That(mod.AudioFallbackActive, Is.True);
                 Assert.That(mod.SettingDescription.Any(entry => entry.setting.ToString() == "Audio warning"), Is.True);
+            });
+        }
+
+        [Test]
+        public void TestPreviewReportsEffectiveAudioAndDuration()
+        {
+            var mod = new OsuModBPMAdjust();
+            mod.ApplyToBeatmapInfo(new BeatmapInfo { BPM = 120, Length = 180000 });
+            mod.TargetBPM.Value = 180;
+            mod.AudioMode.Value = BPMAdjustAudioMode.Nightcore;
+
+            BPMAdjustPreview preview = mod.CreatePreview(180000);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(preview.SourceBPM, Is.EqualTo(120));
+                Assert.That(preview.TargetBPM, Is.EqualTo(180));
+                Assert.That(preview.Rate, Is.EqualTo(1.5));
+                Assert.That(preview.FrequencyAdjustment, Is.EqualTo(1.5));
+                Assert.That(preview.TempoAdjustment, Is.EqualTo(1));
+                Assert.That(preview.PitchSemitones, Is.EqualTo(12 * Math.Log2(1.5)).Within(1e-12));
+                Assert.That(preview.AdjustedLength, Is.EqualTo(120000));
+                Assert.That(preview.ExtremeRate, Is.False);
             });
         }
 

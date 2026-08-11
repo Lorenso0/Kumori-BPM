@@ -8,7 +8,7 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 - Upstream release: `2026.804.2-lazer`
 - Upstream commit: `3c1c96f742e7aae2ff67a7361e058fe91ca3b955`
 - Local branch: `kumori`
-- Kumori release: `2026.804.2-kumori.1`
+- Kumori release: `2026.804.2-kumori.2`
 - Executable version: `2026.804.2-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
@@ -20,27 +20,28 @@ No unofficial osu! source files or third-party mod implementations are included.
 2. Open the mod selector.
 3. Find **BPM Adjust (BPM)** in the Fun column.
 4. Enter a positive target BPM with up to two decimal places, or use the synchronized 140–320 BPM slider. Typed values outside the slider range remain valid.
+   A live summary shows the source and target BPM, effective rate, original and adjusted duration, pitch shift, tempo processing, map-stat behavior, variable-BPM range, and extreme-rate/fallback warnings.
 5. Optionally use **Show only maps** to filter song select to an inclusive star-rating range:
    - **Star rating pre-mod** uses each map's original displayed star rating.
    - **Star rating post-mod** automatically loads a completed profile for the selected target BPM, ruleset, and mod settings. If no complete profile exists, it shows a **Calculate maps** button for one complete exact pass using the same ruleset difficulty calculation as the song-select star display. The pass shows completed/total progress, and **Cancel** aborts without applying partial results. Exact results and unavailable maps are persisted by beatmap hash, so every star range can reuse the completed dataset across future sessions without retrying failed maps.
    - **Disabled** restores the full song list while retaining the entered range for later use.
-6. Select an audio mode:
+6. Select an audio treatment:
    - **Preserve Pitch** changes tempo without shifting the song's pitch.
    - **Adjust Pitch** changes pitch with playback speed.
-   - **Nightcore** uses lazer's fixed 1.5x pitch treatment and synced beat accents while compensating tempo to reach the target BPM.
-   - **Daycore** uses lazer's fixed 0.75x pitch treatment while compensating tempo to reach the target BPM.
    - **Balanced** splits the rate equally between pitch and tempo adjustments to reduce extreme processing artifacts.
+   - **Adaptive** preserves pitch between 0.75x and 1.5x tempo, then moves only the remaining extreme change into pitch for cleaner playback.
    - **Custom Pitch** applies the selected **Custom pitch** shift from -12 to +12 semitones and compensates tempo so the target BPM remains exact.
-   - **Chipmunk** raises pitch by one octave while compensating tempo.
-   - **Deep** lowers pitch by one octave while compensating tempo.
-   - **Nightcore Pitch Only** applies the Nightcore pitch treatment without automatically adding beat accents.
-   - **Preserve Pitch + Accents** preserves the original pitch and automatically adds Nightcore beat accents.
+   - **Nightcore**, **Daycore**, **Chipmunk**, and **Deep** buttons select their familiar pitch as a Custom Pitch preset. This keeps named styles convenient without duplicating audio modes.
+   - Old scores and presets using the previous named audio modes remain playable and are converted to the equivalent treatment when opened in the mod editor.
 7. Select a **Beat accents** mode:
-   - **Automatic** retains the audio mode's normal behavior. Nightcore and Preserve Pitch + Accents add Nightcore percussion; other modes add nothing.
    - **Off** disables additional beat sounds.
    - **Nightcore** adds lazer's beat-synchronised kick, clap, hat, and finish pattern with any audio mode.
    - **Metronome** adds one click per beat with a stronger downbeat.
-8. Choose whether **Scale map stats with BPM** should be enabled:
+8. Select a **Hitsound pitch** mode:
+   - **Follow Playback Rate** retains lazer's normal DT/HT behavior.
+   - **Follow Music Pitch** makes gameplay hitsounds follow the selected music pitch treatment.
+   - **Preserve Pitch** leaves gameplay hitsounds at their original pitch.
+9. Choose whether **Scale map stats with BPM** should be enabled:
    - **Enabled** keeps DT/HT-style rate scaling for AR and OD.
    - **Disabled** compensates rate-sensitive stats so their real-time approach and hit windows match the map's original values. Object spacing, song duration, and playback speed still follow the selected BPM.
 
@@ -58,27 +59,29 @@ Local score panels display the saved target beside the **BPM** mod acronym (for 
 
 The mod is always unranked, disabled in multiplayer, and incompatible with every other rate-changing mod. The custom executable never submits scores to official endpoints, whether or not BPM Adjust is selected; all scores and replays remain local.
 
-Login, chat, friends, beatmap browsing, downloads, and leaderboards remain enabled. The source and executable version are pinned to the current public lazer release for online and memory-reader compatibility. Only the server's known pinned-version liveness response is treated as non-fatal; other network failures continue to be reported normally.
+Login, chat, friends-list retrieval, beatmap browsing, downloads, and leaderboards remain enabled. Official realtime presence, multiplayer, and spectating are disabled because ppy's realtime server validates the modified game assembly hash and rejects custom builds. Friends therefore do not see a Kumori-only session as online. The known realtime-version liveness response is kept separate from API availability so it cannot disable otherwise working API and chat features; other network failures continue to be reported normally.
 
-Any positive finite target is accepted. At tempos below the audio backend's 0.05x limit, the remaining slowdown is moved to frequency so the requested combined rate remains intact without crashing. The mod details show when this fallback is active. If a target/source ratio exceeds the range representable by a `double`, the nearest positive representable rate is used instead of silently returning to `1x`. Extreme rates are experimental and may cause distorted or silent audio, poor performance, or unplayable timing.
+Any positive finite target is accepted. The live preview classifies the effective processing as clean, heavy time stretching, a large pitch shift, or extreme processing based on the actual tempo and frequency stages rather than the combined rate alone. At tempos below the audio backend's 0.05x limit, the remaining slowdown is moved to frequency so the requested combined rate remains intact without crashing. If a target/source ratio exceeds the range representable by a `double`, the nearest positive representable rate is used instead of silently returning to `1x`. Extreme rates are experimental and may cause distorted or silent audio, poor performance, or unplayable timing.
 
 ## Data sharing
 
-By default this release intentionally uses lazer's normal `osu` profile. It therefore reads and writes the same storage configured by `%APPDATA%\osu\storage.ini`, including:
+By default this release uses an isolated `osu-bpm` profile. This prevents concurrent access and schema-migration conflicts with official lazer. It stores its own configuration and Realm database, including:
 
 - `client.realm` for maps, collections, local scores, presets, and metadata;
 - `files/` for beatmaps, skins, and replay content;
 - `game.ini` and `framework.ini` for settings.
 
-This keeps maps and collections identical between the official and BPM builds. Do not run both builds at the same time, and back up the entire lazer data directory before moving between substantially different client versions. Official lazer preserves BPM score JSON but represents the unrecognised mod as `BPM??` and cannot reproduce its gameplay rate.
+Official lazer preserves BPM score JSON but represents the unrecognised mod as `BPM??` and cannot reproduce its gameplay rate.
 
 The BPM build hides non-practice visual/physics gimmick mods from the mod selector to keep it focused. Their implementations remain registered internally, so existing scores, replays, and presets which use them continue to resolve.
 
-For isolated testing, launch with `--bpm-isolated`. This uses a separate `osu-bpm` profile and IPC pipe:
+For compatibility with an existing shared installation, launch with `--bpm-shared-profile`. Do not run official lazer and Kumori simultaneously in this mode, and back up the entire lazer data directory before switching between substantially different client versions:
 
 ```powershell
-& ".\Kumori BPM.exe" --bpm-isolated
+& ".\Kumori BPM.exe" --bpm-shared-profile
 ```
+
+`--bpm-isolated` remains as a backwards-compatible explicit spelling of the new default.
 
 ## Build
 

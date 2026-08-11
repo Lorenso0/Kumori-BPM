@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.Versioning;
 using osu.Desktop.LegacyIpc;
 using osu.Desktop.Windows;
@@ -24,7 +25,7 @@ namespace osu.Desktop
 #if DEBUG
         private const string base_game_name = @"osu-development";
 #else
-        private const string base_game_name = @"osu";
+        private const string base_game_name = BPMCustomBuildPolicy.ISOLATED_GAME_NAME;
 #endif
 
         private static LegacyTcpIpcProvider? legacyIpc;
@@ -77,7 +78,7 @@ namespace osu.Desktop
 
             string gameName = base_game_name;
             bool tournamentClient = false;
-            bool isolatedBPMProfile = false;
+            bool isolatedBPMProfile = !DebugUtils.IsDebugBuild;
 
             foreach (string arg in args)
             {
@@ -91,6 +92,11 @@ namespace osu.Desktop
                     case BPMCustomBuildPolicy.ISOLATED_PROFILE_ARGUMENT:
                         isolatedBPMProfile = true;
                         gameName = BPMCustomBuildPolicy.ISOLATED_GAME_NAME;
+                        break;
+
+                    case BPMCustomBuildPolicy.SHARED_PROFILE_ARGUMENT:
+                        isolatedBPMProfile = false;
+                        gameName = @"osu";
                         break;
 
                     case "--tournament":
@@ -202,7 +208,9 @@ namespace osu.Desktop
             //
             // Special consideration for velopack startup arguments, which must be handled during update.
             // See https://docs.velopack.io/integrating/hooks#command-line-hooks.
-            if (args.Length > 0 && !args[0].StartsWith("--velo", StringComparison.Ordinal))
+            if (args.Any(arg => !arg.StartsWith("--velo", StringComparison.Ordinal)
+                                && arg != BPMCustomBuildPolicy.ISOLATED_PROFILE_ARGUMENT
+                                && arg != BPMCustomBuildPolicy.SHARED_PROFILE_ARGUMENT))
             {
                 Logger.Log("Handling arguments, skipping velopack setup.");
                 return null;

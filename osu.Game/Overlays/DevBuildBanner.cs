@@ -14,6 +14,13 @@ namespace osu.Game.Overlays
 {
     public partial class DevBuildBanner : VisibilityContainer
     {
+        private readonly string text;
+
+        public DevBuildBanner(string text = "DEVELOPER BUILD")
+        {
+            this.text = text;
+        }
+
         [BackgroundDependencyLoader]
         private void load(OsuColour colours, TextureStore textures, OsuGameBase game)
         {
@@ -32,7 +39,7 @@ namespace osu.Game.Overlays
                     Origin = Anchor.BottomCentre,
                     Font = OsuFont.Numeric.With(weight: FontWeight.Bold, size: 12),
                     Colour = colours.YellowDark,
-                    Text = @"DEVELOPER BUILD",
+                    Text = text,
                 },
                 new Sprite
                 {

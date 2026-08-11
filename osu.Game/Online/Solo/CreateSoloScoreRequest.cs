@@ -10,7 +10,7 @@ using osu.Game.Online.Rooms;
 
 namespace osu.Game.Online.Solo
 {
-    public class CreateSoloScoreRequest : APIRequest<APIScoreToken>
+    public class CreateSoloScoreRequest : APIRequest<APIScoreToken>, IScoreSubmissionRequest
     {
         private readonly BeatmapInfo beatmapInfo;
         private readonly int rulesetId;

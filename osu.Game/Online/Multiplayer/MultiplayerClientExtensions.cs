@@ -10,7 +10,6 @@ using osu.Framework.Extensions.ExceptionExtensions;
 using osu.Framework.Extensions.TypeExtensions;
 using osu.Framework.Logging;
 using osu.Game.Utils;
-using osu.Game.Customisation;
 
 namespace osu.Game.Online.Multiplayer
 {
@@ -33,12 +32,6 @@ namespace osu.Game.Online.Multiplayer
 
                     if (exception.GetHubExceptionMessage() is string message)
                     {
-                        if (BPMCustomBuildPolicy.IsExpectedPinnedVersionRejection(message))
-                        {
-                            Logger.Log(message);
-                            return;
-                        }
-
                         // Hub exceptions generally contain something we can show the user directly.
                         Logger.Log(message, level: LogLevel.Important);
                         return;

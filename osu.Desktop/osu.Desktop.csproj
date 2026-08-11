@@ -11,8 +11,8 @@
     <ApplicationIcon>kumori.ico</ApplicationIcon>
     <!-- Keep the custom executable on the exact public lazer version used by
          external integrations such as tosu. Source is pinned to the matching tag. -->
-    <Version>2026.726.0-lazer</Version>
-    <FileVersion>2026.726.0</FileVersion>
+    <Version>$(UpstreamVersion)-lazer</Version>
+    <FileVersion>$(UpstreamVersion)</FileVersion>
     <RuntimeFrameworkVersion>8.0.28</RuntimeFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup>

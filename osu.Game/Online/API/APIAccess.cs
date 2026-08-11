@@ -509,8 +509,17 @@ namespace osu.Game.Online.API
             SecondFactorCode = code;
         }
 
-        public IHubClientConnector GetHubConnector(string clientName, string endpoint) =>
-            new HubClientConnector(clientName, endpoint, this, versionHash);
+        [CanBeNull]
+        public IHubClientConnector GetHubConnector(string clientName, string endpoint)
+        {
+            if (!BPMCustomBuildPolicy.RealtimeOnlineEnabled)
+            {
+                log.Add($@"{clientName} is disabled by the Kumori custom-build policy.");
+                return null;
+            }
+
+            return new HubClientConnector(clientName, endpoint, this, versionHash);
+        }
 
         public IChatClient GetChatClient() => new WebSocketChatClient(this);
 

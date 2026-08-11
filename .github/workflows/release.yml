@@ -12,7 +12,9 @@ on:
       - '20*.*.*-kumori.*'
 
 permissions:
+  attestations: write
   contents: write
+  id-token: write
 
 env:
   KUMORI_RELEASE_VERSION: ${{ inputs.release_version || github.ref_name }}
@@ -39,7 +41,9 @@ jobs:
           $releaseProperties = @($props.Project.PropertyGroup) |
                                Where-Object { $_.Label -eq 'Kumori Release' } |
                                Select-Object -First 1
-          $expected = ([string] $releaseProperties.KumoriVersion).Trim()
+          $upstreamVersion = ([string] $releaseProperties.UpstreamVersion).Trim()
+          $revision = ([string] $releaseProperties.KumoriRevision).Trim()
+          $expected = "$upstreamVersion-kumori.$revision"
           if ($tag -ne $expected) {
             throw "Tag '$tag' does not match KumoriVersion '$expected'."
           }
@@ -113,7 +117,7 @@ jobs:
 
           ./scripts/Publish-Release.ps1 @arguments
 
-      - name: Create draft release
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
@@ -138,8 +142,16 @@ jobs:
 
           $intro = Get-Content RELEASE.md -Raw
           gh release create $version $zip $checksum @velopackAssets `
-            --draft `
             --generate-notes `
             --verify-tag `
             --title "Kumori $version" `
             --notes $intro
+
+      - name: Attest release provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            artifacts/releases/*.zip
+            artifacts/releases/*.sha256
+            artifacts/releases/_work-*/velopack/KumoriBPM-win-Setup.exe
+            artifacts/releases/_work-*/velopack/KumoriBPM-win-Portable.zip
