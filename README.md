@@ -60,18 +60,20 @@ legacy manual-update archive.
 
 The releases are unsigned, so Windows SmartScreen may display a warning.
 
-Kumori uses its isolated `osu-bpm` data profile by default, preventing database
-conflicts with official lazer. Existing users who intentionally want to continue
-using the shared official profile can launch with:
+Kumori uses lazer's normal `osu` data profile by default, so settings, maps,
+collections, skins, scores, and replays carry over automatically. Do not run both
+clients simultaneously against this shared profile.
 
-```powershell
-& ".\Kumori BPM.exe" --bpm-shared-profile
-```
-
-The old explicit isolated option remains accepted for shortcuts and scripts:
+For isolated testing, launch with:
 
 ```powershell
 & ".\Kumori BPM.exe" --bpm-isolated
+```
+
+The explicit shared spelling remains accepted for shortcuts and scripts:
+
+```powershell
+& ".\Kumori BPM.exe" --bpm-shared-profile
 ```
 
 ## Building

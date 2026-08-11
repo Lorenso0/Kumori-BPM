@@ -25,7 +25,7 @@ namespace osu.Desktop
 #if DEBUG
         private const string base_game_name = @"osu-development";
 #else
-        private const string base_game_name = BPMCustomBuildPolicy.ISOLATED_GAME_NAME;
+        private const string base_game_name = @"osu";
 #endif
 
         private static LegacyTcpIpcProvider? legacyIpc;
@@ -78,7 +78,7 @@ namespace osu.Desktop
 
             string gameName = base_game_name;
             bool tournamentClient = false;
-            bool isolatedBPMProfile = !DebugUtils.IsDebugBuild;
+            bool isolatedBPMProfile = false;
 
             foreach (string arg in args)
             {

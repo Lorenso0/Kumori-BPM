@@ -17,8 +17,9 @@ This is an unofficial Windows x64 build based on osu!lazer
 - Simplifies audio to five distinct treatments, adds an Adaptive quality mode,
   turns named pitch styles into presets, and makes beat accents explicit.
 - Adds independent hitsound-pitch control and effective audio-quality warnings.
-- Uses an isolated `osu-bpm` profile by default; `--bpm-shared-profile` remains
-  available for intentional compatibility with an existing lazer library.
+- Uses lazer's normal `osu` profile by default so existing settings, maps,
+  collections, skins, scores, and replays carry over automatically.
+- Keeps `--bpm-isolated` available for a separate `osu-bpm` testing profile.
 - Clearly disables unsupported official realtime presence, multiplayer, and
   spectating while retaining API login, chat, browsing, and downloads.
 - Existing BPM settings, local scores, replays, and presets remain compatible.
@@ -45,9 +46,9 @@ The executables are unsigned and may trigger Windows SmartScreen.
 
 - Official score submission is disabled for the whole client.
 - BPM Adjust is unranked and unavailable in multiplayer.
-- The default `osu-bpm` profile is separate from official lazer.
-- Launch with `--bpm-shared-profile` only when intentionally sharing official
-  lazer data, and never run both clients simultaneously in that mode.
+- The default profile is shared with official lazer; never run both clients
+  simultaneously, and back up the data directory before major version changes.
+- Launch with `--bpm-isolated` when a separate testing profile is preferred.
 - Friends do not see Kumori sessions as online because official realtime
   presence does not accept custom build hashes.
 - Automatic updates are accepted only from the `Lorenso0/Kumori-BPM` GitHub

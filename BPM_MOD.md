@@ -8,7 +8,7 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 - Upstream release: `2026.804.2-lazer`
 - Upstream commit: `3c1c96f742e7aae2ff67a7361e058fe91ca3b955`
 - Local branch: `kumori`
-- Kumori release: `2026.804.2-kumori.2`
+- Kumori release: `2026.804.2-kumori.3`
 - Executable version: `2026.804.2-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
@@ -65,23 +65,23 @@ Any positive finite target is accepted. The live preview classifies the effectiv
 
 ## Data sharing
 
-By default this release uses an isolated `osu-bpm` profile. This prevents concurrent access and schema-migration conflicts with official lazer. It stores its own configuration and Realm database, including:
+By default Kumori uses lazer's normal `osu` profile, so existing settings, beatmaps, collections, skins, local scores, and replays carry over automatically. This profile contains:
 
 - `client.realm` for maps, collections, local scores, presets, and metadata;
 - `files/` for beatmaps, skins, and replay content;
 - `game.ini` and `framework.ini` for settings.
 
-Official lazer preserves BPM score JSON but represents the unrecognised mod as `BPM??` and cannot reproduce its gameplay rate.
+Do not run official lazer and Kumori simultaneously against this shared profile, and back up the data directory before moving between substantially different client versions. Official lazer preserves BPM score JSON but represents the unrecognised mod as `BPM??` and cannot reproduce its gameplay rate.
 
 The BPM build hides non-practice visual/physics gimmick mods from the mod selector to keep it focused. Their implementations remain registered internally, so existing scores, replays, and presets which use them continue to resolve.
 
-For compatibility with an existing shared installation, launch with `--bpm-shared-profile`. Do not run official lazer and Kumori simultaneously in this mode, and back up the entire lazer data directory before switching between substantially different client versions:
+For isolated testing, launch with `--bpm-isolated`. This uses the separate `osu-bpm` profile and IPC pipe:
 
 ```powershell
-& ".\Kumori BPM.exe" --bpm-shared-profile
+& ".\Kumori BPM.exe" --bpm-isolated
 ```
 
-`--bpm-isolated` remains as a backwards-compatible explicit spelling of the new default.
+`--bpm-shared-profile` remains accepted as an explicit spelling of the default shared behavior.
 
 ## Build
 
