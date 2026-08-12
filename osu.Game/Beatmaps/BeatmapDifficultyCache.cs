@@ -268,24 +268,30 @@ namespace osu.Game.Beatmaps
                 }
 
                 // Difficulty calculation is CPU-heavy and each map is independent. Use every
-                // available core except one (kept free for UI/progress/cancellation handling).
-                // Worker priority is restored afterwards because Parallel uses shared pool threads.
+                // available core to complete explicitly-requested library calculations as quickly
+                // as possible. Worker priority is restored afterwards because Parallel uses shared
+                // pool threads.
                 var resultLock = new object();
                 var parallelOptions = new ParallelOptions
                 {
                     CancellationToken = cancellationToken,
-                    MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
+                    MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount),
                     TaskScheduler = TaskScheduler.Default,
                 };
 
-                Parallel.ForEach(pending, parallelOptions, item =>
-                {
-                    Thread currentThread = Thread.CurrentThread;
-                    ThreadPriority originalPriority = currentThread.Priority;
-
-                    try
+                Parallel.ForEach(pending, parallelOptions,
+                    () =>
                     {
-                        currentThread.Priority = ThreadPriority.Highest;
+                        Thread workerThread = Thread.CurrentThread;
+                        ThreadPriority originalPriority = workerThread.Priority;
+                        var workerRuleset = rulesetInfo.CreateInstance();
+                        Debug.Assert(workerRuleset != null);
+                        workerThread.Priority = ThreadPriority.Highest;
+
+                        return (Ruleset: workerRuleset, Thread: workerThread, OriginalPriority: originalPriority);
+                    },
+                    (item, _, worker) =>
+                    {
                         cancellationToken.ThrowIfCancellationRequested();
 
                         var lookup = new DifficultyCacheLookup(item.Beatmap, rulesetInfo as RulesetInfo, orderedMods);
@@ -302,7 +308,7 @@ namespace osu.Game.Beatmaps
                             }
                         }
 
-                        rating ??= computeStarRating(lookup, cancellationToken);
+                        rating ??= computeStarRating(lookup, worker.Ruleset, cancellationToken);
 
                         if (rating.HasValue)
                         {
@@ -321,14 +327,10 @@ namespace osu.Game.Beatmaps
                             lock (resultLock)
                                 persisted.UnavailableBeatmaps.Add(item.PersistedKey);
                         }
-                    }
-                    finally
-                    {
-                        currentThread.Priority = originalPriority;
-                    }
-
-                    reportProgress?.Invoke(Interlocked.Increment(ref completed), beatmaps.Count);
-                });
+                        reportProgress?.Invoke(Interlocked.Increment(ref completed), beatmaps.Count);
+                        return worker;
+                    },
+                    worker => worker.Thread.Priority = worker.OriginalPriority);
 
                 cancellationToken.ThrowIfCancellationRequested();
                 persisted.Version = persisted_filter_cache_version;
@@ -686,22 +688,15 @@ namespace osu.Game.Beatmaps
             }
         }
 
-        private double? computeStarRating(in DifficultyCacheLookup key, CancellationToken cancellationToken)
+        private double? computeStarRating(in DifficultyCacheLookup key, Ruleset ruleset, CancellationToken cancellationToken)
         {
             var beatmapInfo = key.BeatmapInfo;
             var rulesetInfo = key.Ruleset;
 
             try
             {
-                var ruleset = rulesetInfo.CreateInstance();
-                Debug.Assert(ruleset != null);
-
-                Mod[] calculationMods = key.OrderedMods.Select(mod => mod.DeepClone()).ToArray();
-
-                var workingBeatmap = new PlayableCachedWorkingBeatmap(beatmapManager.GetWorkingBeatmap(beatmapInfo));
-                workingBeatmap.GetPlayableBeatmap(ruleset.RulesetInfo, calculationMods, cancellationToken);
-
-                var difficulty = ruleset.CreateDifficultyCalculator(workingBeatmap).Calculate(calculationMods, cancellationToken);
+                IWorkingBeatmap workingBeatmap = beatmapManager.GetWorkingBeatmap(beatmapInfo);
+                var difficulty = ruleset.CreateDifficultyCalculator(workingBeatmap).Calculate(key.OrderedMods, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 return double.IsFinite(difficulty.StarRating) ? difficulty.StarRating : 0;
