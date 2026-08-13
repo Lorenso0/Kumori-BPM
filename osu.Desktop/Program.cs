@@ -208,9 +208,12 @@ namespace osu.Desktop
             //
             // Special consideration for velopack startup arguments, which must be handled during update.
             // See https://docs.velopack.io/integrating/hooks#command-line-hooks.
-            if (args.Any(arg => !arg.StartsWith("--velo", StringComparison.Ordinal)
-                                && arg != BPMCustomBuildPolicy.ISOLATED_PROFILE_ARGUMENT
-                                && arg != BPMCustomBuildPolicy.SHARED_PROFILE_ARGUMENT))
+            // Velopack's first argument identifies the startup hook. Further arguments are
+            // hook payload and are not required to use the same prefix.
+            if (args.Length > 0
+                && !args[0].StartsWith("--velo", StringComparison.Ordinal)
+                && args.Any(arg => arg != BPMCustomBuildPolicy.ISOLATED_PROFILE_ARGUMENT
+                                   && arg != BPMCustomBuildPolicy.SHARED_PROFILE_ARGUMENT))
             {
                 Logger.Log("Handling arguments, skipping velopack setup.");
                 return null;

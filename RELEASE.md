@@ -5,8 +5,12 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
-- Speeds up exact post-mod star-rating indexing by using every logical CPU core
-  and reusing calculation resources across maps.
+- Fixes intermittent Alt-Tab stalls and delayed keyboard releases in fullscreen
+  by updating SDL to include its fullscreen display-mode refresh fix.
+- Fixes updates launching the client during multiple installer hook phases, so
+  applying an update requires only the intended restart.
+- Keeps exact post-mod star-rating indexing responsive by reserving CPU capacity
+  for window and input processing while continuing to reuse calculation resources.
 - Fixes experimental-audio crackling by packaging the exact low-latency .NET
   runtime used by the matching official lazer release.
 - Personal mod presets now retain the pre/post-mod star filter and its range.

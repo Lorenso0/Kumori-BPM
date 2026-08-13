@@ -237,8 +237,6 @@ namespace osu.Game.Beatmaps
 
             return Task.Factory.StartNew<IReadOnlyDictionary<Guid, double>>(() =>
             {
-                Thread.CurrentThread.Priority = ThreadPriority.Highest;
-
                 string profileKey = createFilterProfileKey(rulesetInfo, orderedMods);
                 PersistedFilterStarRatings persisted = loadPersistedFilterStarRatingsForProfile(profileKey, rulesetInfo, orderedMods, false) ?? new PersistedFilterStarRatings();
                 var results = new Dictionary<Guid, double>(beatmaps.Count);
@@ -267,28 +265,22 @@ namespace osu.Game.Beatmaps
                     pending.Add((beatmap, beatmapKey));
                 }
 
-                // Difficulty calculation is CPU-heavy and each map is independent. Use every
-                // available core to complete explicitly-requested library calculations as quickly
-                // as possible. Worker priority is restored afterwards because Parallel uses shared
-                // pool threads.
+                // Difficulty calculation is CPU-heavy and each map is independent. Keep one
+                // logical core available so window focus and input events stay responsive.
                 var resultLock = new object();
                 var parallelOptions = new ParallelOptions
                 {
                     CancellationToken = cancellationToken,
-                    MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount),
+                    MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
                     TaskScheduler = TaskScheduler.Default,
                 };
 
                 Parallel.ForEach(pending, parallelOptions,
                     () =>
                     {
-                        Thread workerThread = Thread.CurrentThread;
-                        ThreadPriority originalPriority = workerThread.Priority;
                         var workerRuleset = rulesetInfo.CreateInstance();
                         Debug.Assert(workerRuleset != null);
-                        workerThread.Priority = ThreadPriority.Highest;
-
-                        return (Ruleset: workerRuleset, Thread: workerThread, OriginalPriority: originalPriority);
+                        return workerRuleset;
                     },
                     (item, _, worker) =>
                     {
@@ -308,7 +300,7 @@ namespace osu.Game.Beatmaps
                             }
                         }
 
-                        rating ??= computeStarRating(lookup, worker.Ruleset, cancellationToken);
+                        rating ??= computeStarRating(lookup, worker, cancellationToken);
 
                         if (rating.HasValue)
                         {
@@ -330,7 +322,7 @@ namespace osu.Game.Beatmaps
                         reportProgress?.Invoke(Interlocked.Increment(ref completed), beatmaps.Count);
                         return worker;
                     },
-                    worker => worker.Thread.Priority = worker.OriginalPriority);
+                    _ => { });
 
                 cancellationToken.ThrowIfCancellationRequested();
                 persisted.Version = persisted_filter_cache_version;

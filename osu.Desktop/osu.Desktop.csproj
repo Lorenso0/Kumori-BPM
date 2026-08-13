@@ -20,6 +20,11 @@
   <PropertyGroup>
     <StartupObject>osu.Desktop.Program</StartupObject>
   </PropertyGroup>
+  <ItemGroup Label="Kumori Release Metadata">
+    <!-- Keep the public lazer product version intact for integrations while
+         making each Kumori revision identifiable in the assembly itself. -->
+    <AssemblyMetadata Include="KumoriVersion" Value="$(KumoriVersion)" />
+  </ItemGroup>
   <ItemGroup Label="Project References">
     <ProjectReference Include="..\osu.Game.Tournament\osu.Game.Tournament.csproj" />
     <ProjectReference Include="..\osu.Game\osu.Game.csproj" />
@@ -30,6 +35,9 @@
   </ItemGroup>
   <ItemGroup Label="Package References">
     <PackageReference Include="System.IO.Packaging" Version="10.0.9" />
+    <!-- Includes SDL's fix for unnecessarily refreshing fullscreen display modes
+         during focus changes, which could stall Alt-Tab on Windows. -->
+    <PackageReference Include="ppy.SDL3-CS" Version="2026.722.0" />
     <!-- Held back due to invite bug in newer versions. See https://github.com/Lachee/discord-rpc-csharp/issues/286 -->
     <PackageReference Include="DiscordRichPresence" Version="1.5.0.51" />
     <PackageReference Include="Velopack" Version="0.0.1298" />

@@ -2,7 +2,7 @@
 <Project>
   <PropertyGroup Label="Kumori Release">
     <UpstreamVersion>2026.804.2</UpstreamVersion>
-    <KumoriRevision>5</KumoriRevision>
+    <KumoriRevision>6</KumoriRevision>
     <KumoriVersion>$(UpstreamVersion)-kumori.$(KumoriRevision)</KumoriVersion>
     <OfficialRuntimeVersion>8.0.29</OfficialRuntimeVersion>
   </PropertyGroup>
