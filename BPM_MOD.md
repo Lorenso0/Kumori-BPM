@@ -8,7 +8,7 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 - Upstream release: `2026.804.2-lazer`
 - Upstream commit: `3c1c96f742e7aae2ff67a7361e058fe91ca3b955`
 - Local branch: `kumori`
-- Kumori release: `2026.804.2-kumori.6`
+- Kumori release: `2026.804.2-kumori.7`
 - Executable version: `2026.804.2-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 

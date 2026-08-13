@@ -13,6 +13,7 @@ using osu.Framework.Platform;
 using osu.Game;
 using osu.Desktop.Updater;
 using osu.Framework;
+using osu.Framework.Configuration;
 using osu.Framework.Logging;
 using osu.Game.Customisation;
 using osu.Game.Updater;
@@ -42,6 +43,18 @@ namespace osu.Desktop
         public OsuGameDesktop(string[]? args = null)
             : base(args)
         {
+        }
+
+        [BackgroundDependencyLoader]
+        private void load(FrameworkConfigManager frameworkConfig)
+        {
+            if (!OperatingSystem.IsWindows() || LocalConfig.Get<bool>(OsuSetting.FullscreenAltTabMigrationCompleted))
+                return;
+
+            // Preserve exclusive fullscreen while avoiding SDL's expensive minimise/restore
+            // display-mode transition whenever focus moves to another application.
+            frameworkConfig.SetValue(FrameworkSetting.MinimiseOnFocusLossInFullscreen, false);
+            LocalConfig.SetValue(OsuSetting.FullscreenAltTabMigrationCompleted, true);
         }
 
         public override StableStorage? GetStorageForStableInstall()

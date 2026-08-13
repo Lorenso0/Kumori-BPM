@@ -5,6 +5,9 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
+- Keeps exclusive fullscreen's low-latency presentation while avoiding the
+  expensive minimise/restore cycle on Alt-Tab. Existing installations migrate
+  the setting once and can still change it manually afterward.
 - Fixes intermittent Alt-Tab stalls and delayed keyboard releases in fullscreen
   by updating SDL to include its fullscreen display-mode refresh fix.
 - Fixes updates launching the client during multiple installer hook phases, so
