@@ -48,13 +48,13 @@ namespace osu.Desktop
         [BackgroundDependencyLoader]
         private void load(FrameworkConfigManager frameworkConfig)
         {
-            if (!OperatingSystem.IsWindows() || LocalConfig.Get<bool>(OsuSetting.FullscreenAltTabMigrationCompleted))
+            if (!OperatingSystem.IsWindows() || LocalConfig.Get<bool>(OsuSetting.FullscreenAltTabRevertMigrationCompleted))
                 return;
 
-            // Preserve exclusive fullscreen while avoiding SDL's expensive minimise/restore
-            // display-mode transition whenever focus moves to another application.
-            frameworkConfig.SetValue(FrameworkSetting.MinimiseOnFocusLossInFullscreen, false);
-            LocalConfig.SetValue(OsuSetting.FullscreenAltTabMigrationCompleted, true);
+            // Revert the focus-loss behaviour introduced in kumori.7. This restores
+            // SDL's normal exclusive-fullscreen minimise/restore transition.
+            frameworkConfig.SetValue(FrameworkSetting.MinimiseOnFocusLossInFullscreen, true);
+            LocalConfig.SetValue(OsuSetting.FullscreenAltTabRevertMigrationCompleted, true);
         }
 
         public override StableStorage? GetStorageForStableInstall()

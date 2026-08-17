@@ -173,7 +173,7 @@ namespace osu.Game.Configuration
             SetDefault(OsuSetting.ReleaseStream, ReleaseStream.Lazer);
 
             SetDefault(OsuSetting.Version, string.Empty);
-            SetDefault(OsuSetting.FullscreenAltTabMigrationCompleted, false);
+            SetDefault(OsuSetting.FullscreenAltTabRevertMigrationCompleted, false);
 
             SetDefault(OsuSetting.ShowFirstRunSetup, true);
             SetDefault(OsuSetting.ShowMobileDisclaimer, RuntimeInfo.IsMobile);
@@ -487,9 +487,9 @@ namespace osu.Game.Configuration
         DashboardDisplayStyle,
 
         /// <summary>
-        /// Whether Kumori has disabled automatic minimisation on focus loss to avoid
-        /// tearing down and restoring exclusive fullscreen during Alt-Tab.
+        /// Whether Kumori has reverted the fullscreen focus-loss behaviour introduced
+        /// in 2026.804.2-kumori.7.
         /// </summary>
-        FullscreenAltTabMigrationCompleted,
+        FullscreenAltTabRevertMigrationCompleted,
     }
 }

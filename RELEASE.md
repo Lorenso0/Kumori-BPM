@@ -5,11 +5,10 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
-- Keeps exclusive fullscreen's low-latency presentation while avoiding the
-  expensive minimise/restore cycle on Alt-Tab. Existing installations migrate
-  the setting once and can still change it manually afterward.
-- Fixes intermittent Alt-Tab stalls and delayed keyboard releases in fullscreen
-  by updating SDL to include its fullscreen display-mode refresh fix.
+- Reverts the fullscreen focus-loss change from kumori.7 because it could make
+  exclusive fullscreen behave incorrectly. Existing kumori.7 installations
+  migrate once to restore normal automatic minimisation on Alt-Tab.
+- Updates SDL to include its fullscreen display-mode refresh fix.
 - Fixes updates launching the client during multiple installer hook phases, so
   applying an update requires only the intended restart.
 - Keeps exact post-mod star-rating indexing responsive by reserving CPU capacity
