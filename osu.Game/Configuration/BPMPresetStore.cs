@@ -4,26 +4,98 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using osu.Framework.Logging;
+using osu.Framework.Platform;
 
 namespace osu.Game.Configuration
 {
     public static class BPMPresetStore
     {
         private const int current_version = 1;
+        private const string durable_file = "bpm-presets.json";
+        private const string temporary_file = "bpm-presets.json.tmp";
+
+        /// <summary>
+        /// Loads presets from Kumori's durable file, falling back to the legacy shared
+        /// configuration value and migrating it when necessary.
+        /// </summary>
+        public static IReadOnlyList<BPMPreset> Load(Storage storage, string? legacySerialised)
+        {
+            if (storage.Exists(durable_file))
+            {
+                try
+                {
+                    using Stream? stream = storage.GetStream(durable_file);
+
+                    if (stream != null)
+                    {
+                        using var reader = new StreamReader(stream);
+
+                        if (tryDeserialise(reader.ReadToEnd(), out IReadOnlyList<BPMPreset> durablePresets))
+                            return durablePresets;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Logger.Error(exception, "Failed to load durable BPM presets");
+                }
+            }
+
+            IReadOnlyList<BPMPreset> legacyPresets = Deserialise(legacySerialised);
+
+            if (legacyPresets.Count > 0)
+                Save(storage, legacyPresets);
+
+            return legacyPresets;
+        }
+
+        /// <summary>
+        /// Immediately and atomically persists presets outside the shared lazer configuration.
+        /// </summary>
+        public static string Save(Storage storage, IEnumerable<BPMPreset> presets)
+        {
+            string serialised = Serialise(presets);
+
+            try
+            {
+                using (Stream stream = storage.GetStream(temporary_file, FileAccess.Write, FileMode.Create))
+                using (var writer = new StreamWriter(stream))
+                    writer.Write(serialised);
+
+                storage.Move(temporary_file, durable_file);
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "Failed to save durable BPM presets");
+            }
+
+            return serialised;
+        }
 
         public static IReadOnlyList<BPMPreset> Deserialise(string? serialised)
         {
+            return tryDeserialise(serialised, out IReadOnlyList<BPMPreset> presets) ? presets : Array.Empty<BPMPreset>();
+        }
+
+        private static bool tryDeserialise(string? serialised, out IReadOnlyList<BPMPreset> presets)
+        {
+            presets = Array.Empty<BPMPreset>();
+
             if (string.IsNullOrWhiteSpace(serialised))
-                return Array.Empty<BPMPreset>();
+                return false;
 
             try
             {
                 var document = JsonConvert.DeserializeObject<BPMPresetDocument>(serialised);
 
                 if (document?.Version == current_version)
-                    return normalise(document.Presets);
+                {
+                    presets = normalise(document.Presets);
+                    return true;
+                }
             }
             catch (JsonException)
             {
@@ -38,7 +110,11 @@ namespace osu.Game.Configuration
                     migrated.Add(BPMPreset.Create(value));
             }
 
-            return normalise(migrated);
+            if (migrated.Count == 0)
+                return false;
+
+            presets = normalise(migrated);
+            return true;
         }
 
         public static string Serialise(IEnumerable<BPMPreset> presets) =>

@@ -8,7 +8,7 @@ This repository is a local custom build of [ppy/osu](https://github.com/ppy/osu)
 - Upstream release: `2026.804.2-lazer`
 - Upstream commit: `3c1c96f742e7aae2ff67a7361e058fe91ca3b955`
 - Local branch: `kumori`
-- Kumori release: `2026.804.2-kumori.8`
+- Kumori release: `2026.804.2-kumori.9`
 - Executable version: `2026.804.2-lazer`
 - Licence: the upstream MIT licence in `LICENCE` remains in effect.
 
@@ -69,7 +69,8 @@ By default Kumori uses lazer's normal `osu` profile, so existing settings, beatm
 
 - `client.realm` for maps, collections, local scores, presets, and metadata;
 - `files/` for beatmaps, skins, and replay content;
-- `game.ini` and `framework.ini` for settings.
+- `game.ini` and `framework.ini` for settings;
+- `bpm-presets.json` for durable saved BPM shortcuts which official lazer cannot overwrite.
 
 Do not run official lazer and Kumori simultaneously against this shared profile, and back up the data directory before moving between substantially different client versions. Official lazer preserves BPM score JSON but represents the unrecognised mod as `BPM??` and cannot reproduce its gameplay rate.
 

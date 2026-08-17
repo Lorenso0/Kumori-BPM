@@ -5,6 +5,11 @@ This is an unofficial Windows x64 build based on osu!lazer
 
 ## What's new
 
+- Saves BPM shortcut buttons in a dedicated atomic file so shared-profile and
+  update configuration rewrites cannot delete them. Existing values migrate
+  automatically when available.
+- Checkpoints exact post-mod star calculations every 10,000 maps and whenever a
+  pass is cancelled, allowing large libraries to resume instead of restarting.
 - Reverts the fullscreen focus-loss change from kumori.7 because it could make
   exclusive fullscreen behave incorrectly. Existing kumori.7 installations
   migrate once to restore normal automatic minimisation on Alt-Tab.

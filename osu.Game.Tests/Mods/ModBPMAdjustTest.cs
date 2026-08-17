@@ -2,10 +2,12 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using osu.Framework.Audio;
+using osu.Framework.Testing;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.ControlPoints;
 using osu.Game.Configuration;
@@ -530,6 +532,21 @@ namespace osu.Game.Tests.Mods
                 Assert.That(migrated.Select(p => p.BPM), Is.EqualTo(new[] { 120, 174.5, 200 }));
                 Assert.That(serialised, Does.StartWith("{\"version\":1"));
                 Assert.That(reloaded.Select(p => p.Name), Is.EqualTo(new[] { "120 BPM", "174.5 BPM", "200 BPM" }));
+            });
+        }
+
+        [Test]
+        public void TestPresetStoreSurvivesSharedConfigBeingCleared()
+        {
+            using var storage = new TemporaryNativeStorage("bpm-preset-store-test");
+
+            IReadOnlyList<BPMPreset> migrated = BPMPresetStore.Load(storage, "120;174.5;200");
+            IReadOnlyList<BPMPreset> reloaded = BPMPresetStore.Load(storage, string.Empty);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(migrated.Select(p => p.BPM), Is.EqualTo(new[] { 120, 174.5, 200 }));
+                Assert.That(reloaded.Select(p => p.BPM), Is.EqualTo(new[] { 120, 174.5, 200 }));
             });
         }
 

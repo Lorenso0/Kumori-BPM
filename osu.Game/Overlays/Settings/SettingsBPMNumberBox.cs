@@ -15,6 +15,7 @@ using osu.Framework.Graphics.UserInterface;
 using osu.Framework.Input;
 using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
+using osu.Framework.Platform;
 using osu.Game.Configuration;
 using osu.Game.Beatmaps;
 using osu.Game.Graphics;
@@ -84,9 +85,11 @@ namespace osu.Game.Overlays.Settings
             private Bindable<BPMStarRatingFilterMode>? configuredStarRatingFilterMode;
             private Bindable<string>? configuredStarRatingMinimum;
             private Bindable<string>? configuredStarRatingMaximum;
+            private Storage storage = null!;
             private ModBPMAdjust? filterSettingsMod;
             private bool updatingFromText;
             private bool updatingSlider;
+            private bool updatingPresetStorage;
             private string lastPreview = string.Empty;
 
             private readonly Func<ModBPMAdjust?> getMod;
@@ -342,10 +345,25 @@ namespace osu.Game.Overlays.Settings
             private BPMStarRatingCalculationController? calculationController { get; set; }
 
             [BackgroundDependencyLoader]
-            private void load(OsuConfigManager config)
+            private void load(OsuConfigManager config, Storage storage)
             {
+                this.storage = storage;
                 presetStorage = config.GetBindable<string>(OsuSetting.BPMAdjustPresets);
-                presetStorage.BindValueChanged(e => loadPresets(e.NewValue), true);
+                string durablePresets = BPMPresetStore.Serialise(BPMPresetStore.Load(storage, presetStorage.Value));
+                loadPresets(durablePresets);
+                updateLegacyPresetStorage(durablePresets);
+                presetStorage.BindValueChanged(e =>
+                {
+                    if (updatingPresetStorage || string.IsNullOrWhiteSpace(e.NewValue))
+                        return;
+
+                    IReadOnlyList<BPMPreset> importedPresets = BPMPresetStore.Deserialise(e.NewValue);
+
+                    if (importedPresets.Count == 0)
+                        return;
+
+                    loadPresets(BPMPresetStore.Save(storage, importedPresets));
+                });
 
                 configuredStarRatingFilterMode = config.GetBindable<BPMStarRatingFilterMode>(OsuSetting.BPMStarRatingFilterMode);
                 configuredStarRatingMinimum = config.GetBindable<string>(OsuSetting.BPMStarRatingFilterMinimum);
@@ -547,7 +565,25 @@ namespace osu.Game.Overlays.Settings
                 if (presetStorage == null)
                     return;
 
-                presetStorage.Value = BPMPresetStore.Serialise(presets);
+                updateLegacyPresetStorage(BPMPresetStore.Save(storage, presets));
+                updatePresetButtons();
+            }
+
+            private void updateLegacyPresetStorage(string serialised)
+            {
+                if (presetStorage == null || presetStorage.Value == serialised)
+                    return;
+
+                updatingPresetStorage = true;
+
+                try
+                {
+                    presetStorage.Value = serialised;
+                }
+                finally
+                {
+                    updatingPresetStorage = false;
+                }
             }
 
             private void updateAddPresetButton()

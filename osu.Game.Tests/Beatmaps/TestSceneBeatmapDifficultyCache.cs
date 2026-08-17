@@ -182,6 +182,42 @@ namespace osu.Game.Tests.Beatmaps
         }
 
         [Test]
+        public void TestCancelledFilterCalculationPersistsCompletedWork()
+        {
+            Task<IReadOnlyDictionary<Guid, double>> cancelledCalculation = null;
+            Task<BeatmapDifficultyCache.FilterStarRatingProfile> persistedCalculation = null;
+            BeatmapInfo beatmap = null;
+            Mod[] mods = null;
+
+            AddStep("queue cancellable BPM filter calculation", () =>
+            {
+                beatmap = importedSet.Beatmaps.First();
+                var bpm = new OsuModBPMAdjust();
+                bpm.ApplyToBeatmapInfo(beatmap);
+                bpm.TargetBPM.Value = beatmap.BPM * 1.234567;
+                mods = new Mod[] { bpm };
+
+                var cancellation = new CancellationTokenSource();
+                cancelledCalculation = actualDifficultyCache.CalculateStarRatingsForFilterAsync(
+                    Enumerable.Repeat(beatmap, 256).ToArray(),
+                    beatmap.Ruleset,
+                    mods,
+                    (completed, _) =>
+                    {
+                        if (completed > 0)
+                            cancellation.Cancel();
+                    },
+                    cancellation.Token);
+            });
+            AddUntilStep("cancelled calculation stops", () => cancelledCalculation.IsCompleted);
+            AddStep("load checkpointed result", () =>
+                persistedCalculation = actualDifficultyCache.LoadStarRatingsForFilterAsync(new[] { beatmap }, beatmap.Ruleset, mods));
+            AddUntilStep("checkpoint loads", () => persistedCalculation.IsCompletedSuccessfully);
+            AddAssert("completed work survived cancellation", () => persistedCalculation.GetResultSafely(), () => Is.Not.Null);
+            AddAssert("checkpoint contains exact rating", () => persistedCalculation.GetResultSafely()!.Ratings.ContainsKey(beatmap.ID));
+        }
+
+        [Test]
         public void TestStarDifficultyAdjustHashCodeConflict()
         {
             OsuModDifficultyAdjust difficultyAdjust = null;

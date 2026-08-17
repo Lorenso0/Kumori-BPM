@@ -41,6 +41,7 @@ namespace osu.Game.Beatmaps
     public partial class BeatmapDifficultyCache : MemoryCachingComponent<BeatmapDifficultyCache.DifficultyCacheLookup, StarDifficulty?>
     {
         private const int persisted_filter_cache_version = 2;
+        private const int filter_checkpoint_interval = 10000;
 
         // Too many simultaneous updates can lead to stutters. One thread seems to work fine for song select display purposes.
         private readonly ThreadedTaskScheduler updateScheduler = new ThreadedTaskScheduler(1, nameof(BeatmapDifficultyCache));
@@ -268,6 +269,7 @@ namespace osu.Game.Beatmaps
                 // Difficulty calculation is CPU-heavy and each map is independent. Keep one
                 // logical core available so window focus and input events stay responsive.
                 var resultLock = new object();
+                int nextCheckpoint = completed + filter_checkpoint_interval;
                 var parallelOptions = new ParallelOptions
                 {
                     CancellationToken = cancellationToken,
@@ -275,58 +277,85 @@ namespace osu.Game.Beatmaps
                     TaskScheduler = TaskScheduler.Default,
                 };
 
-                Parallel.ForEach(pending, parallelOptions,
-                    () =>
-                    {
-                        var workerRuleset = rulesetInfo.CreateInstance();
-                        Debug.Assert(workerRuleset != null);
-                        return workerRuleset;
-                    },
-                    (item, _, worker) =>
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        var lookup = new DifficultyCacheLookup(item.Beatmap, rulesetInfo as RulesetInfo, orderedMods);
-                        double? rating = null;
-
-                        if (CheckExists(lookup, out StarDifficulty? exactDifficulty) && exactDifficulty.HasValue)
-                            rating = exactDifficulty.Value.Stars;
-                        else
+                try
+                {
+                    Parallel.ForEach(pending, parallelOptions,
+                        () =>
                         {
-                            lock (filterStarRatingCache)
-                            {
-                                if (filterStarRatingCache.TryGetValue(lookup, out double cached))
-                                    rating = cached;
-                            }
-                        }
-
-                        rating ??= computeStarRating(lookup, worker, cancellationToken);
-
-                        if (rating.HasValue)
+                            var workerRuleset = rulesetInfo.CreateInstance();
+                            Debug.Assert(workerRuleset != null);
+                            return workerRuleset;
+                        },
+                        (item, _, worker) =>
                         {
-                            lock (resultLock)
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            var lookup = new DifficultyCacheLookup(item.Beatmap, rulesetInfo as RulesetInfo, orderedMods);
+                            double? rating = null;
+
+                            if (CheckExists(lookup, out StarDifficulty? exactDifficulty) && exactDifficulty.HasValue)
+                                rating = exactDifficulty.Value.Stars;
+                            else
                             {
-                                results[item.Beatmap.ID] = rating.Value;
-                                persisted.Ratings[item.PersistedKey] = rating.Value;
-                                persisted.UnavailableBeatmaps.Remove(item.PersistedKey);
+                                lock (filterStarRatingCache)
+                                {
+                                    if (filterStarRatingCache.TryGetValue(lookup, out double cached))
+                                        rating = cached;
+                                }
                             }
 
-                            lock (filterStarRatingCache)
-                                filterStarRatingCache[lookup] = rating.Value;
-                        }
-                        else
-                        {
-                            lock (resultLock)
-                                persisted.UnavailableBeatmaps.Add(item.PersistedKey);
-                        }
-                        reportProgress?.Invoke(Interlocked.Increment(ref completed), beatmaps.Count);
-                        return worker;
-                    },
-                    _ => { });
+                            rating ??= computeStarRating(lookup, worker, cancellationToken);
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            if (rating.HasValue)
+                            {
+                                lock (resultLock)
+                                {
+                                    results[item.Beatmap.ID] = rating.Value;
+                                    persisted.Ratings[item.PersistedKey] = rating.Value;
+                                    persisted.UnavailableBeatmaps.Remove(item.PersistedKey);
+                                }
+
+                                lock (filterStarRatingCache)
+                                    filterStarRatingCache[lookup] = rating.Value;
+                            }
+                            else
+                            {
+                                lock (resultLock)
+                                    persisted.UnavailableBeatmaps.Add(item.PersistedKey);
+                            }
+
+                            int currentProgress = Interlocked.Increment(ref completed);
+                            reportProgress?.Invoke(currentProgress, beatmaps.Count);
+
+                            if (currentProgress >= Volatile.Read(ref nextCheckpoint))
+                            {
+                                lock (resultLock)
+                                {
+                                    if (currentProgress >= nextCheckpoint)
+                                    {
+                                        nextCheckpoint = currentProgress + filter_checkpoint_interval;
+                                        persisted.Version = persisted_filter_cache_version;
+                                        savePersistedFilterStarRatings(profileKey, persisted);
+                                    }
+                                }
+                            }
+
+                            return worker;
+                        },
+                        _ => { });
+                }
+                finally
+                {
+                    // Retain all completed work even when the user cancels the pass or exits.
+                    lock (resultLock)
+                    {
+                        persisted.Version = persisted_filter_cache_version;
+                        savePersistedFilterStarRatings(profileKey, persisted);
+                    }
+                }
 
                 cancellationToken.ThrowIfCancellationRequested();
-                persisted.Version = persisted_filter_cache_version;
-                savePersistedFilterStarRatings(profileKey, persisted);
                 return results;
             }, cancellationToken, TaskCreationOptions.HideScheduler | TaskCreationOptions.RunContinuationsAsynchronously, filterScheduler);
         }

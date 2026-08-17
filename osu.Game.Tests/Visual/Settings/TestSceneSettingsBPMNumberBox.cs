@@ -32,7 +32,11 @@ namespace osu.Game.Tests.Visual.Settings
         [SetUpSteps]
         public void SetUpSteps()
         {
-            AddStep("clear BPM presets", () => config.SetValue(OsuSetting.BPMAdjustPresets, string.Empty));
+            AddStep("clear BPM presets", () =>
+            {
+                config.SetValue(OsuSetting.BPMAdjustPresets, string.Empty);
+                BPMPresetStore.Save(LocalStorage, Array.Empty<BPMPreset>());
+            });
             AddStep("clear star rating filter", () =>
             {
                 config.SetValue(OsuSetting.BPMStarRatingFilterMode, BPMStarRatingFilterMode.Disabled);
