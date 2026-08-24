@@ -48,9 +48,6 @@ directory inside the official osu! data folder. In osu!, open Settings and use
 already exist, replace any older Kumori DLL, then restart the official client
 and select **Kumori** from the ruleset icons.
 
-See [UPDATE.md](UPDATE.md) when moving from the discontinued custom-client
-build or updating an existing ruleset installation.
-
 ## Build from source
 
 Run:
@@ -132,6 +129,10 @@ Custom rulesets track osu! APIs and may need a rebuild after a client update.
 Pushing a tag named `ruleset-v*` runs the GitHub Actions release workflow. It
 builds and tests the ruleset, creates or updates the matching GitHub Release,
 and attaches only `osu.Game.Rulesets.Kumori.dll` plus its SHA-256 checksum.
+
+For a complete maintainer release, tell the coding agent `update.md`. The
+[UPDATE.md](UPDATE.md) runbook instructs it to validate, update GitHub, create
+the next versioned release, wait for the action, and verify the downloaded DLL.
 
 ## Licence
 

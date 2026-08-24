@@ -79,6 +79,7 @@ jobs:
         run: |
           $dll = 'artifacts/rulesets/osu.Game.Rulesets.Kumori.dll'
           $checksum = "$dll.sha256"
+          $releaseTitle = "Kumori BPM ruleset " + ($env:RELEASE_TAG -replace '^ruleset-', '')
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
@@ -86,8 +87,8 @@ jobs:
           } else {
             gh release create $env:RELEASE_TAG $dll $checksum `
               --target $env:GITHUB_SHA `
-              --title "Kumori BPM ruleset $env:RELEASE_TAG" `
-              --notes-file UPDATE.md
+              --title $releaseTitle `
+              --generate-notes
           }
 
           if ($LASTEXITCODE -ne 0) {
