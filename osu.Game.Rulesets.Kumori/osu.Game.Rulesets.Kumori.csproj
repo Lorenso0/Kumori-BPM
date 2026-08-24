@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup Label="Project">
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <RootNamespace>osu.Game.Rulesets.Kumori</RootNamespace>
+    <AssemblyName>osu.Game.Rulesets.Kumori</AssemblyName>
+    <AssemblyTitle>Kumori BPM ruleset for osu!</AssemblyTitle>
+    <Description>Official-client custom ruleset providing osu! gameplay with target-BPM playback controls.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ppy.osu.Game.Rulesets.Osu" Version="2026.730.0" />
+  </ItemGroup>
+</Project>

@@ -1,6 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-    - name: Official osu! help
-      url: https://github.com/ppy/osu/discussions/categories/q-a
-      about: Use the official project for issues unrelated to Kumori or BPM Adjust.
-

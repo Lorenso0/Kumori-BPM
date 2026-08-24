@@ -1,120 +1,139 @@
-<p align="center">
-  <img width="240" alt="Kumori logo" src="assets/kumori-icon.png">
-</p>
+# Kumori BPM ruleset for the official osu! client
 
-# Kumori BPM
-
-Kumori is an unofficial Windows build of [osu!lazer](https://github.com/ppy/osu)
-with a target-BPM gameplay mod. It is based on the public
-`2026.804.2-lazer` release.
+`osu.Game.Rulesets.Kumori` is an external custom ruleset for official osu!lazer.
+It delegates the complete playfield, hit objects, scoring, input, skinning, editor,
+and difficulty implementation to the official osu! ruleset, then adds Kumori's
+target-BPM mod on top.
 
 This project is not affiliated with or endorsed by ppy Pty Ltd. The osu! name
 and branding belong to their respective owners.
 
-## BPM Adjust
+## Included
 
-The **BPM Adjust (BPM)** mod appears in the Fun category for osu!, taiko,
-catch, and mania. It can:
+- target BPM with decimal text entry and a 40–400 BPM convenience slider;
+- saved BPM shortcuts in `kumori-bpm-presets.json`;
+- Preserve Pitch, Adjust Pitch, Balanced, Adaptive, and Custom Pitch audio modes;
+- Nightcore, Daycore, Chipmunk, and Deep custom-pitch shortcuts;
+- independent Nightcore or metronome beat accents;
+- hitsounds which follow playback rate, music pitch, or preserve pitch;
+- optional DT/HT-style AR and OD scaling;
+- a global inclusive star-range song filter using imported pre-mod stars or exact
+  post-mod stars calculated and persisted per BPM/mod setup;
+- SQLite-backed, shareable post-mod indexing with JSON migration, cancellation
+  checkpoints, and lock-free cached carousel lookups;
+- a separate resumable map-first builder for exact 220–270 BPM NM and HD ratings
+  using fixed DA AR10/HP0, without running lazer;
+- limited active-play compatibility for memory readers: the in-flight score temporarily exposes
+  osu!standard's mode ID while preserving BPM Adjust's custom acronym, target, settings, and exact
+  playback rate, without mutating osu!'s live ruleset identity;
+- local score, replay, and personal-preset serialisation through normal mod settings;
+- all standard osu! mods alongside BPM Adjust.
 
-- Set a target BPM which is recalculated for each selected beatmap.
-- Choose a distinct Preserve Pitch, Adjust Pitch, Balanced, Adaptive, or Custom
-  Pitch treatment, with Nightcore, Daycore, Chipmunk, and Deep pitch presets.
-- Add explicit Nightcore percussion or a metronome independently of pitch.
-- Choose whether hitsounds follow playback speed, the music pitch, or preserve pitch.
-- Optionally preserve the map's real-time AR and OD behavior.
-- Save reusable BPM presets.
-- Store its settings in local scores and replays.
-- Preview the effective rate, duration, pitch, tempo processing, audio-quality
-  risk, stat behavior, and variable-BPM range before playing.
+The ruleset is unranked and has no official online ruleset ID. Scores remain local.
+Translated mod data is restored before osu! imports the local score. Kumori always keeps its
+custom-ruleset identity; spoofing the live online ID causes official song-select state corruption.
 
-See [BPM_MOD.md](BPM_MOD.md) for detailed behavior, limitations, and safety
-information.
+## Download and install
 
-## Safety
+Kumori no longer ships a modified osu! client, installer, or portable client.
+New [ruleset releases](https://github.com/Lorenso0/Kumori-BPM/releases/latest)
+contain only the external ruleset and its checksum:
 
-Kumori is an unranked custom client:
+- [`osu.Game.Rulesets.Kumori.dll`](https://github.com/Lorenso0/Kumori-BPM/releases/latest/download/osu.Game.Rulesets.Kumori.dll)
+- [`osu.Game.Rulesets.Kumori.dll.sha256`](https://github.com/Lorenso0/Kumori-BPM/releases/latest/download/osu.Game.Rulesets.Kumori.dll.sha256)
 
-- Official score submission is disabled for the entire build.
-- BPM Adjust is unavailable in multiplayer.
-- Login, chat, the friends list, beatmap browsing, downloads, and leaderboards
-  remain enabled.
-- Official realtime presence, multiplayer, and spectating are disabled because
-  ppy's realtime service does not accept custom executable hashes. Friends will
-  not see Kumori sessions as online.
-- Installer and Velopack portable builds update from Kumori's GitHub releases.
+Close osu!, then copy `osu.Game.Rulesets.Kumori.dll` into the `rulesets`
+directory inside the official osu! data folder. In osu!, open Settings and use
+**Open osu! folder** to find that data folder. Create `rulesets` if it does not
+already exist, replace any older Kumori DLL, then restart the official client
+and select **Kumori** from the ruleset icons.
 
-## Installing
+See [UPDATE.md](UPDATE.md) when moving from the discontinued custom-client
+build or updating an existing ruleset installation.
 
-Download `KumoriBPM-win-Setup.exe` from the repository's GitHub Releases page.
-The per-user installer creates a separate Kumori application directory and does
-not require administrator access. Once installed, Kumori checks for releases in
-the background, downloads updates, and offers to restart when they are ready.
+## Build from source
 
-Existing users of releases older than `2026.711.0-kumori.3` must install this
-version manually once. Automatic updates work for subsequent releases.
-
-For a self-contained alternative, download and extract
-`KumoriBPM-win-Portable.zip`, then run `Kumori BPM.exe`. This package also
-self-updates. The versioned `kumori-osu-*-win-x64.zip` remains available as a
-legacy manual-update archive.
-
-The releases are unsigned, so Windows SmartScreen may display a warning.
-
-Kumori uses lazer's normal `osu` data profile by default, so settings, maps,
-collections, skins, scores, and replays carry over automatically. Do not run both
-clients simultaneously against this shared profile.
-
-For isolated testing, launch with:
+Run:
 
 ```powershell
-& ".\Kumori BPM.exe" --bpm-isolated
+./scripts/Publish-Ruleset.ps1
 ```
 
-The explicit shared spelling remains accepted for shortcuts and scripts:
+The compiled file is written to
+`artifacts/rulesets/osu.Game.Rulesets.Kumori.dll` and installs the same way as
+the release download.
+
+After selecting Kumori, enable **Show converts** once in song select so standard maps
+are available to the custom ruleset. The setting is remembered by osu!.
+
+The star-range controls are inside **Mods → BPM Adjust**. Pre-mod filtering is
+immediate. For post-mod filtering, press **Calculate maps** once for each new
+BPM/mod setup; the exact profile is reused in later sessions.
+
+## Shared 220–270 star database
+
+Build the standalone Windows executable once with:
 
 ```powershell
-& ".\Kumori BPM.exe" --bpm-shared-profile
+./scripts/Publish-StarDB-Builder.ps1
 ```
 
-## Building
-
-The repository pins the required .NET SDK in `global.json`.
+Close lazer, then run:
 
 ```powershell
-dotnet restore osu.Desktop.slnf
-dotnet build osu.Desktop.slnf -c Release
-dotnet test osu.Game.Tests/osu.Game.Tests.csproj -c Release --filter "FullyQualifiedName~ModBPMAdjust|FullyQualifiedName~BPMCustomBuildPolicy"
-dotnet test osu.Game.Rulesets.Osu.Tests/osu.Game.Rulesets.Osu.Tests.csproj -c Release --filter "FullyQualifiedName~ModBPMAdjust"
+./artifacts/star-db-builder/Kumori.StarDB.Builder.exe
 ```
 
-To create the audited Windows release ZIP and checksum:
+The builder automatically resolves `%APPDATA%\osu\storage.ini`, opens lazer's
+`client.realm` read-only, and follows each beatmap record to its exact file in
+the hashed Realm file store. It does not crawl for loose `.osu` files and it does
+not run inside the game.
+
+The Windows interface shows the detected Realm and output folders, lets either
+folder be changed with a picker, and defaults to every logical CPU core. Press
+**Start / Resume** to begin. The progress bar shows maps, ratings, speed, ETA,
+resumed work, and unavailable maps. **Pause safely** finishes the active SQLite
+batches before stopping; the next run resumes them automatically.
+
+For a source-tree run without publishing first:
 
 ```powershell
-dotnet tool restore
-.\scripts\Publish-Release.ps1
+./scripts/Run-StarDB-Builder.ps1
 ```
 
-Generated files are written below `artifacts/releases/`. The release script
-also creates the Velopack installer, self-updating portable package, update
-feed, and full/delta update packages.
+The standalone builder:
 
-## Maintaining the fork
+- calculates every whole-number BPM from 220 through 270, inclusive;
+- calculates both No Mod and Hidden, with DA fixed to AR10/HP0;
+- keeps **Scale map stats with BPM** enabled;
+- loads each unique beatmap hash once, then reuses its difficulty calculator for
+  all 102 profiles;
+- uses every processor core and writes results in large SQLite
+  transactions;
+- resumes from fully completed maps after cancellation or restart;
+- records unavailable maps as completed work so they do not loop forever.
 
-The scheduled `Update from upstream lazer` workflow checks ppy's official
-GitHub releases daily. A new `-lazer` tag is merged, release metadata is updated,
-and the complete build/test/package audit runs before the `kumori` branch and
-matching `-kumori.1` tag are pushed. A successful update dispatches the release
-workflow automatically. Merge conflicts create an issue and never publish an
-unverified build.
+The result is `kumori-star-ratings.db` in the selected output directory (the
+detected lazer data directory by default. Completed builds checkpoint SQLite's write-ahead
+log into that single file. Close osu! before copying it into the osu! data folder
+or replacing an existing database. Beatmaps are identified by their portable
+file hash, and profile keys include the osu! difficulty-calculator build, so a
+shared database cannot silently reuse incompatible star values. Existing JSON
+profiles under `kumori-star-ratings/` migrate into SQLite when first loaded.
 
-Do not re-enable ppy's production deployment, NuGet publishing, Sentry, or
-internal infrastructure workflows in this fork.
+HP and OD do not affect raw osu!standard star rating and therefore do not create
+separate profiles. AR and CS do affect star rating and remain part of the profile
+identity.
+
+Custom rulesets track osu! APIs and may need a rebuild after a client update.
+
+## Publishing a ruleset release
+
+Pushing a tag named `ruleset-v*` runs the GitHub Actions release workflow. It
+builds and tests the ruleset, creates or updates the matching GitHub Release,
+and attaches only `osu.Game.Rulesets.Kumori.dll` plus its SHA-256 checksum.
 
 ## Licence
 
-The upstream osu! source and Kumori changes are distributed under the
-[MIT licence](LICENCE). Third-party libraries retain their own licences; the
-release packaging script generates a notice from the restored NuGet metadata.
-
-The osu! resource package has separate terms described by
-[ppy/osu-resources](https://github.com/ppy/osu-resources).
+Kumori is distributed under the [MIT licence](LICENCE). Its dependencies retain
+their respective licences.

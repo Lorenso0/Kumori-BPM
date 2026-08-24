@@ -1,15 +1,19 @@
-name: Kumori Release
+name: Release Kumori ruleset DLL
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_version:
-        description: Existing Kumori tag to build and release
-        required: true
-        type: string
   push:
     tags:
-      - '20*.*.*-kumori.*'
+      - 'ruleset-v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag (must start with ruleset-v)
+        required: true
+        type: string
+
+concurrency:
+  group: ruleset-release-${{ github.ref }}-${{ inputs.release_tag }}
+  cancel-in-progress: false
 
 permissions:
   attestations: write
@@ -17,36 +21,24 @@ permissions:
   id-token: write
 
 env:
-  KUMORI_RELEASE_VERSION: ${{ inputs.release_version || github.ref_name }}
+  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
 jobs:
   release:
-    name: Build draft GitHub release
+    name: Build, test, and publish DLL
     runs-on: windows-latest
-    timeout-minutes: 75
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
       - name: Validate release tag
         shell: pwsh
         run: |
-          $tag = $env:KUMORI_RELEASE_VERSION
-          if ($tag -notmatch '^\d{4}\.\d+\.\d+-kumori\.\d+$') {
-            throw "Invalid Kumori release tag: $tag"
+          if ($env:RELEASE_TAG -notmatch '^ruleset-v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$') {
+            throw "Invalid ruleset release tag: $env:RELEASE_TAG"
           }
 
-          [xml] $props = Get-Content Directory.Build.props
-          $releaseProperties = @($props.Project.PropertyGroup) |
-                               Where-Object { $_.Label -eq 'Kumori Release' } |
-                               Select-Object -First 1
-          $upstreamVersion = ([string] $releaseProperties.UpstreamVersion).Trim()
-          $revision = ([string] $releaseProperties.KumoriRevision).Trim()
-          $expected = "$upstreamVersion-kumori.$revision"
-          if ($tag -ne $expected) {
-            throw "Tag '$tag' does not match KumoriVersion '$expected'."
-          }
+      - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@v5
@@ -58,100 +50,46 @@ jobs:
             **/*.props
             global.json
 
-      - name: Restore pinned build tools
-        run: dotnet tool restore
-
       - name: Restore
-        run: |
-          dotnet restore osu.Desktop.slnf
-          dotnet restore osu.Desktop/osu.Desktop.csproj -r win-x64
+        run: dotnet restore osu.Game.Rulesets.Kumori.Tests/osu.Game.Rulesets.Kumori.Tests.csproj
 
-      - name: Build release client
-        run: dotnet build osu.Desktop.slnf -c Release --no-restore -warnaserror
+      - name: Test ruleset
+        run: dotnet test osu.Game.Rulesets.Kumori.Tests/osu.Game.Rulesets.Kumori.Tests.csproj -c Release --no-restore -warnaserror
 
-      - name: Test BPM game behavior and safety policy
-        run: >
-          dotnet test osu.Game.Tests/osu.Game.Tests.csproj
-          -c Release --no-build
-          --filter "FullyQualifiedName~ModBPMAdjust|FullyQualifiedName~BPMCustomBuildPolicy"
+      - name: Publish ruleset DLL
+        shell: pwsh
+        run: ./scripts/Publish-Ruleset.ps1
 
-      - name: Test osu! ruleset BPM behavior
-        run: >
-          dotnet test osu.Game.Rulesets.Osu.Tests/osu.Game.Rulesets.Osu.Tests.csproj
-          -c Release --no-build
-          --filter "FullyQualifiedName~ModBPMAdjust"
-
-      - name: Restore previous updater package
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Create SHA-256 checksum
         shell: pwsh
         run: |
-          $repository = "https://github.com/${{ github.repository }}"
-          $assetNames = @(gh api "repos/${{ github.repository }}/releases/latest" --jq '.assets[].name')
+          $dll = 'artifacts/rulesets/osu.Game.Rulesets.Kumori.dll'
+          $checksum = "$(Get-FileHash -LiteralPath $dll -Algorithm SHA256 | Select-Object -ExpandProperty Hash) *osu.Game.Rulesets.Kumori.dll"
+          Set-Content -LiteralPath "$dll.sha256" -Value $checksum -Encoding ascii -NoNewline
 
-          if ($assetNames -contains 'releases.win.json') {
-            dotnet tool run vpk -- --skip-updates download github `
-              --outputDir artifacts/velopack-base `
-              --channel win `
-              --repoUrl $repository `
-              --token $env:GH_TOKEN
-
-            if ($LASTEXITCODE -ne 0) {
-              throw "Failed to restore the previous Velopack release."
-            }
-          } else {
-            Write-Host "The previous release has no Velopack feed; building the bootstrap updater release without a delta."
-          }
-
-      - name: Publish and audit
-        shell: pwsh
-        run: |
-          $arguments = @{
-            ReleaseVersion = $env:KUMORI_RELEASE_VERSION
-            NoRestore = $true
-          }
-
-          if (Test-Path -LiteralPath artifacts/velopack-base) {
-            $arguments.VelopackBaseDirectory = 'artifacts/velopack-base'
-          }
-
-          ./scripts/Publish-Release.ps1 @arguments
-
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: pwsh
-        run: |
-          $version = $env:KUMORI_RELEASE_VERSION
-          $zip = "artifacts/releases/kumori-osu-$version-win-x64.zip"
-          $checksum = "$zip.sha256"
-          $velopack = "artifacts/releases/_work-$version/velopack"
-          $velopackAssets = @(
-            "$velopack/KumoriBPM-win-Setup.exe",
-            "$velopack/KumoriBPM-win-Setup.exe.sha256",
-            "$velopack/KumoriBPM-win-Portable.zip",
-            "$velopack/KumoriBPM-win-Portable.zip.sha256",
-            "$velopack/KumoriBPM-$version-full.nupkg",
-            "$velopack/releases.win.json",
-            "$velopack/RELEASES"
-          )
-          $delta = "$velopack/KumoriBPM-$version-delta.nupkg"
-          if (Test-Path -LiteralPath $delta) {
-            $velopackAssets += $delta
-          }
-
-          $intro = Get-Content RELEASE.md -Raw
-          gh release create $version $zip $checksum @velopackAssets `
-            --generate-notes `
-            --verify-tag `
-            --title "Kumori $version" `
-            --notes $intro
-
-      - name: Attest release provenance
+      - name: Attest DLL provenance
         uses: actions/attest-build-provenance@v3
         with:
-          subject-path: |
-            artifacts/releases/*.zip
-            artifacts/releases/*.sha256
-            artifacts/releases/_work-*/velopack/KumoriBPM-win-Setup.exe
-            artifacts/releases/_work-*/velopack/KumoriBPM-win-Portable.zip
+          subject-path: artifacts/rulesets/osu.Game.Rulesets.Kumori.dll
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $dll = 'artifacts/rulesets/osu.Game.Rulesets.Kumori.dll'
+          $checksum = "$dll.sha256"
+
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELEASE_TAG $dll $checksum --clobber
+          } else {
+            gh release create $env:RELEASE_TAG $dll $checksum `
+              --target $env:GITHUB_SHA `
+              --title "Kumori BPM ruleset $env:RELEASE_TAG" `
+              --notes-file UPDATE.md
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub Release publishing failed.'
+          }
