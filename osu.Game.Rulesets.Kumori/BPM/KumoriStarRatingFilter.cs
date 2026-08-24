@@ -228,6 +228,7 @@ namespace osu.Game.Rulesets.Kumori.BPM
     {
         private const int current_version = 2;
         private const string legacy_directory = "kumori-star-ratings";
+        private const string obsolete_bulk_calculator_fingerprint = "2026.730.0.0";
 
         public const string DatabaseFilename = KumoriStarRatingDatabase.Filename;
 
@@ -239,6 +240,15 @@ namespace osu.Game.Rulesets.Kumori.BPM
             string serialisedMods = serialiseDifficultyAffectingSettings(selectedMods, normaliseDifficultyAdjust: true);
             byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(
                 $"{getCalculatorFingerprint()}|{getCalculationVersion(selectedMods)}|{rulesetInfo.ShortName}|{serialisedMods}"));
+            return Convert.ToHexString(hash);
+        }
+
+        internal static string CreateObsoleteProfileKey(IRulesetInfo rulesetInfo, IEnumerable<Mod> mods)
+        {
+            Mod[] selectedMods = mods.ToArray();
+            string serialisedMods = serialiseDifficultyAffectingSettings(selectedMods, normaliseDifficultyAdjust: true, includeHidden: true);
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(
+                $"{obsolete_bulk_calculator_fingerprint}|{getCalculationVersion(selectedMods)}|{rulesetInfo.ShortName}|{serialisedMods}"));
             return Convert.ToHexString(hash);
         }
 
@@ -258,8 +268,8 @@ namespace osu.Game.Rulesets.Kumori.BPM
             return Convert.ToHexString(hash);
         }
 
-        private static string serialiseDifficultyAffectingSettings(IEnumerable<Mod> mods, bool normaliseDifficultyAdjust) =>
-            string.Join("|", mods.OrderBy(mod => mod.Acronym).Select(mod =>
+        private static string serialiseDifficultyAffectingSettings(IEnumerable<Mod> mods, bool normaliseDifficultyAdjust, bool includeHidden = false) =>
+            string.Join("|", mods.Where(mod => includeHidden || mod is not OsuModHidden).OrderBy(mod => mod.Acronym).Select(mod =>
             {
                 if (mod is KumoriModBPMAdjust bpm)
                 {
@@ -301,7 +311,7 @@ namespace osu.Game.Rulesets.Kumori.BPM
         }
 
         private static string getCalculatorFingerprint() =>
-            typeof(OsuDifficultyCalculator).Assembly.GetName().Version?.ToString() ?? "unknown-calculator";
+            KumoriDifficultyCalculator.OfficialDifficultyVersion.ToString(CultureInfo.InvariantCulture);
 
         public static string CreateBeatmapKey(BeatmapInfo beatmap) => CreateBeatmapKey(beatmap.ID, beatmap.Hash);
 
@@ -451,6 +461,16 @@ namespace osu.Game.Rulesets.Kumori.BPM
 
         internal static HashSet<string> GetFullyIndexedBeatmapKeys(Storage storage, IReadOnlyCollection<string> profileKeys) =>
             KumoriStarRatingDatabase.GetFullyIndexedBeatmapKeys(storage, profileKeys);
+
+        internal static bool DeleteProfiles(Storage storage, IReadOnlyCollection<string> profileKeys, bool compact)
+        {
+            bool deleted = KumoriStarRatingDatabase.DeleteProfiles(storage, profileKeys, compact);
+
+            foreach (string profileKey in profileKeys)
+                profiles.TryRemove(profileKey, out _);
+
+            return deleted;
+        }
 
         internal static void StoreBatch(Storage storage, IReadOnlyCollection<KumoriStarRatingDatabaseWrite> writes, bool updateMemory, bool profilesAlreadyEnsured = false)
         {

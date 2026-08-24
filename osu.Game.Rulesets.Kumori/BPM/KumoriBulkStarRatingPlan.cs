@@ -12,28 +12,55 @@ namespace osu.Game.Rulesets.Kumori.BPM
     {
         public const int MinimumBPM = 220;
         public const int MaximumBPM = 270;
-        public const int ProfileCount = (MaximumBPM - MinimumBPM + 1) * 2;
+        public const int ProfileCount = MaximumBPM - MinimumBPM + 1;
 
         public static IReadOnlyList<KumoriBulkStarRatingProfile> Create(IRulesetInfo rulesetInfo)
         {
             var profiles = new List<KumoriBulkStarRatingProfile>(ProfileCount);
 
             for (int targetBPM = MinimumBPM; targetBPM <= MaximumBPM; targetBPM++)
-            {
-                profiles.Add(createProfile(rulesetInfo, targetBPM, hidden: false));
-                profiles.Add(createProfile(rulesetInfo, targetBPM, hidden: true));
-            }
+                profiles.Add(createProfile(rulesetInfo, targetBPM));
 
             return profiles;
         }
 
-        private static KumoriBulkStarRatingProfile createProfile(IRulesetInfo rulesetInfo, int targetBPM, bool hidden)
+        public static IReadOnlyList<string> CreateObsoleteBulkProfileKeys(IRulesetInfo rulesetInfo)
         {
-            Mod[] mods = createMods(targetBPM, hidden);
-            return new KumoriBulkStarRatingProfile(targetBPM, hidden, KumoriStarRatingIndex.CreateProfileKey(rulesetInfo, mods), mods);
+            var profileKeys = new List<string>(ProfileCount * 2);
+
+            for (int targetBPM = MinimumBPM; targetBPM <= MaximumBPM; targetBPM++)
+            {
+                Mod[] mods = createObsoleteMods(targetBPM);
+                profileKeys.Add(KumoriStarRatingIndex.CreateObsoleteProfileKey(rulesetInfo, mods));
+                profileKeys.Add(KumoriStarRatingIndex.CreateObsoleteProfileKey(rulesetInfo, [.. mods, new OsuModHidden()]));
+            }
+
+            return profileKeys;
         }
 
-        private static Mod[] createMods(int targetBPM, bool hidden)
+        private static KumoriBulkStarRatingProfile createProfile(IRulesetInfo rulesetInfo, int targetBPM)
+        {
+            Mod[] mods = createMods(targetBPM);
+            return new KumoriBulkStarRatingProfile(targetBPM, KumoriStarRatingIndex.CreateProfileKey(rulesetInfo, mods), mods);
+        }
+
+        private static Mod[] createMods(int targetBPM)
+        {
+            var bpm = new KumoriModBPMAdjust
+            {
+                TargetBPM = { Value = targetBPM },
+                ScaleMapStatsWithBPM = { Value = false },
+            };
+            var difficultyAdjust = new OsuModDifficultyAdjust
+            {
+                ApproachRate = { Value = 10 },
+                DrainRate = { Value = 0 },
+            };
+
+            return [bpm, difficultyAdjust];
+        }
+
+        private static Mod[] createObsoleteMods(int targetBPM)
         {
             var bpm = new KumoriModBPMAdjust
             {
@@ -46,13 +73,11 @@ namespace osu.Game.Rulesets.Kumori.BPM
                 DrainRate = { Value = 0 },
             };
 
-            return hidden
-                ? [bpm, new OsuModHidden(), difficultyAdjust]
-                : [bpm, difficultyAdjust];
+            return [bpm, difficultyAdjust];
         }
     }
 
-    internal sealed record KumoriBulkStarRatingProfile(int TargetBPM, bool Hidden, string ProfileKey, Mod[] TemplateMods)
+    internal sealed record KumoriBulkStarRatingProfile(int TargetBPM, string ProfileKey, Mod[] TemplateMods)
     {
         public Mod[] CreateWorkerMods() => TemplateMods.Select(mod => mod.DeepClone()).ToArray();
     }

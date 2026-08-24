@@ -101,7 +101,7 @@ namespace osu.Game.Rulesets.Kumori
         }
 
         public override DifficultyCalculator CreateDifficultyCalculator(IWorkingBeatmap beatmap) =>
-            new OsuDifficultyCalculator(RulesetInfo, new BPMPreparedWorkingBeatmap(beatmap));
+            new KumoriDifficultyCalculator(RulesetInfo, new BPMPreparedWorkingBeatmap(beatmap));
 
         internal KumoriStarOnlyBatchCalculator CreateStarOnlyBatchCalculator(IWorkingBeatmap beatmap) =>
             new KumoriStarOnlyBatchCalculator(RulesetInfo, new BPMPreparedWorkingBeatmap(beatmap));

@@ -16,6 +16,7 @@ using osu.Game.Rulesets.Difficulty;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Rulesets.Osu.Beatmaps;
+using osu.Game.Rulesets.Osu.Difficulty;
 using osu.Game.Rulesets.Osu.Mods;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Osu.Scoring;
@@ -529,6 +530,24 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
+        public void TestHiddenDoesNotCreateASeparateStarProfile()
+        {
+            var ruleset = new KumoriRuleset();
+            var bpm = new KumoriModBPMAdjust { TargetBPM = { Value = 240 } };
+            var difficultyAdjust = new OsuModDifficultyAdjust
+            {
+                CircleSize = { Value = 4 },
+                ApproachRate = { Value = 10 },
+                DrainRate = { Value = 0 },
+            };
+
+            string noHidden = KumoriStarRatingIndex.CreateProfileKey(ruleset.RulesetInfo, [bpm, difficultyAdjust]);
+            string hidden = KumoriStarRatingIndex.CreateProfileKey(ruleset.RulesetInfo, [bpm, new OsuModHidden(), difficultyAdjust]);
+
+            Assert.That(hidden, Is.EqualTo(noHidden));
+        }
+
+        [Test]
         public void TestCompletedLegacyDifficultyAdjustProfileMigratesWithoutRecalculation()
         {
             using var storage = new TemporaryNativeStorage("kumori-star-profile-migration-test");
@@ -598,19 +617,21 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
-        public void TestBulkStarPlanCovers220To270WithNmAndHidden()
+        public void TestBulkStarPlanCovers220To270Once()
         {
             var ruleset = new KumoriRuleset();
             System.Collections.Generic.IReadOnlyList<KumoriBulkStarRatingProfile> profiles = KumoriBulkStarRatingPlan.Create(ruleset.RulesetInfo);
+            System.Collections.Generic.IReadOnlyList<string> obsoleteProfiles = KumoriBulkStarRatingPlan.CreateObsoleteBulkProfileKeys(ruleset.RulesetInfo);
 
             Assert.Multiple(() =>
             {
-                Assert.That(profiles, Has.Count.EqualTo(102));
+                Assert.That(profiles, Has.Count.EqualTo(51));
                 Assert.That(profiles.Select(profile => profile.ProfileKey), Is.Unique);
+                Assert.That(obsoleteProfiles, Has.Count.EqualTo(102));
+                Assert.That(obsoleteProfiles, Is.Unique);
+                Assert.That(obsoleteProfiles, Has.None.Matches<string>(key => profiles.Any(profile => profile.ProfileKey == key)));
                 Assert.That(profiles.Min(profile => profile.TargetBPM), Is.EqualTo(220));
                 Assert.That(profiles.Max(profile => profile.TargetBPM), Is.EqualTo(270));
-                Assert.That(profiles.Count(profile => profile.Hidden), Is.EqualTo(51));
-                Assert.That(profiles.Count(profile => !profile.Hidden), Is.EqualTo(51));
             });
 
             foreach (KumoriBulkStarRatingProfile profile in profiles)
@@ -621,12 +642,31 @@ namespace osu.Game.Rulesets.Kumori.Tests
                 Assert.Multiple(() =>
                 {
                     Assert.That(bpm.TargetBPM.Value, Is.EqualTo(profile.TargetBPM));
-                    Assert.That(bpm.ScaleMapStatsWithBPM.Value, Is.True);
+                    Assert.That(bpm.ScaleMapStatsWithBPM.Value, Is.False);
                     Assert.That(difficultyAdjust.ApproachRate.Value, Is.EqualTo(10));
                     Assert.That(difficultyAdjust.DrainRate.Value, Is.EqualTo(0));
-                    Assert.That(profile.TemplateMods.OfType<OsuModHidden>().Any(), Is.EqualTo(profile.Hidden));
+                    Assert.That(profile.TemplateMods.OfType<OsuModHidden>(), Is.Empty);
                 });
             }
+        }
+
+        [Test]
+        public void TestObsoleteBulkProfilesAreDeletedAndCompacted()
+        {
+            using var storage = new TemporaryNativeStorage("kumori-bulk-profile-pruning-test");
+            var ruleset = new KumoriRuleset();
+            string obsoleteProfile = KumoriBulkStarRatingPlan.CreateObsoleteBulkProfileKeys(ruleset.RulesetInfo).First();
+
+            KumoriStarRatingIndex.Store(storage, obsoleteProfile, new System.Collections.Generic.Dictionary<string, double>
+            {
+                ["map"] = 6.25,
+            }, [], true);
+            KumoriStarRatingIndex.ClearMemory();
+
+            Assert.That(KumoriStarRatingIndex.Load(storage, obsoleteProfile), Is.True);
+            Assert.That(KumoriStarRatingIndex.DeleteProfiles(storage, [obsoleteProfile], compact: true), Is.True);
+            Assert.That(KumoriStarRatingIndex.Load(storage, obsoleteProfile), Is.False);
+            Assert.That(KumoriStarRatingIndex.DeleteProfiles(storage, [obsoleteProfile], compact: true), Is.False);
         }
 
         [Test]
@@ -652,7 +692,7 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
-        public void TestStarOnlyBatchCalculatorMatchesEveryOfficialBulkProfile()
+        public void TestStarOnlyBatchCalculatorMatchesEveryBulkProfile()
         {
             var beatmap = new Beatmap<OsuHitObject>
             {
@@ -680,32 +720,65 @@ namespace osu.Game.Rulesets.Kumori.Tests
             KumoriStarOnlyBatchCalculator batchCalculator = ruleset.CreateStarOnlyBatchCalculator(new TestWorkingBeatmap(beatmap));
             IReadOnlyList<KumoriBulkStarRatingProfile> profiles = KumoriBulkStarRatingPlan.Create(ruleset.RulesetInfo);
 
-            for (int i = 0; i < profiles.Count; i += 2)
+            foreach (KumoriBulkStarRatingProfile profile in profiles)
             {
-                KumoriBulkStarRatingProfile noHiddenProfile = profiles[i];
-                KumoriBulkStarRatingProfile hiddenProfile = profiles[i + 1];
-                Mod[] noHiddenMods = noHiddenProfile.CreateWorkerMods();
-                Mod[] hiddenMods = hiddenProfile.CreateWorkerMods();
+                Mod[] mods = profile.CreateWorkerMods();
 
-                foreach (KumoriModBPMAdjust bpm in noHiddenMods.OfType<KumoriModBPMAdjust>())
+                foreach (KumoriModBPMAdjust bpm in mods.OfType<KumoriModBPMAdjust>())
                     bpm.SetSourceBPM(120);
 
-                foreach (KumoriModBPMAdjust bpm in hiddenMods.OfType<KumoriModBPMAdjust>())
-                    bpm.SetSourceBPM(120);
+                double expected = calculator.Calculate(mods).StarRating;
+                double actual = batchCalculator.CalculateStarRating(mods);
 
-                double noHiddenRating = calculator.Calculate(noHiddenMods).StarRating;
-                double hiddenRating = calculator.Calculate(hiddenMods).StarRating;
-                KumoriStarRatingPair batchRatings = batchCalculator.CalculatePair(noHiddenMods, hiddenMods);
+                Assert.That(actual, Is.EqualTo(expected).Within(1e-12), $"At {profile.TargetBPM} BPM");
+            }
+        }
 
-                Assert.Multiple(() =>
+        [Test]
+        public void TestHiddenDoesNotAffectLiveKumoriStarRating()
+        {
+            var beatmap = new Beatmap<OsuHitObject>
+            {
+                BeatmapInfo = new BeatmapInfo { BPM = 120 },
+                Difficulty = new BeatmapDifficulty
                 {
-                    Assert.That(noHiddenProfile.TargetBPM, Is.EqualTo(hiddenProfile.TargetBPM));
-                    Assert.That(noHiddenProfile.Hidden, Is.False);
-                    Assert.That(hiddenProfile.Hidden, Is.True);
-                    Assert.That(batchRatings.NoHidden, Is.EqualTo(noHiddenRating).Within(1e-12), $"NM at {noHiddenProfile.TargetBPM} BPM");
-                    Assert.That(batchRatings.Hidden, Is.EqualTo(hiddenRating).Within(1e-12), $"HD at {hiddenProfile.TargetBPM} BPM");
+                    ApproachRate = 9,
+                    CircleSize = 4,
+                    OverallDifficulty = 8,
+                },
+            };
+            beatmap.ControlPointInfo.Add(0, new TimingControlPoint { BeatLength = 500 });
+
+            for (int i = 0; i < 100; i++)
+            {
+                beatmap.HitObjects.Add(new HitCircle
+                {
+                    StartTime = 1000 + i * 250,
+                    Position = i % 2 == 0 ? new Vector2(64, 64) : new Vector2(448, 320),
                 });
             }
+
+            var ruleset = new KumoriRuleset();
+            var hidden = new OsuModHidden();
+            DifficultyCalculator kumori = ruleset.CreateDifficultyCalculator(new TestWorkingBeatmap(beatmap));
+            var official = new OsuDifficultyCalculator(ruleset.RulesetInfo, new TestWorkingBeatmap(beatmap));
+
+            double noHiddenRating = kumori.Calculate().StarRating;
+            DifficultyAttributes hiddenAttributes = kumori.Calculate([hidden]);
+            double flashlightRating = kumori.Calculate([new OsuModFlashlight()]).StarRating;
+            double hiddenFlashlightRating = kumori.Calculate([hidden, new OsuModFlashlight()]).StarRating;
+            double officialNoHiddenRating = official.Calculate().StarRating;
+            double officialHiddenRating = official.Calculate([hidden]).StarRating;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(hiddenAttributes.StarRating, Is.EqualTo(noHiddenRating).Within(1e-12));
+                Assert.That(hiddenFlashlightRating, Is.EqualTo(flashlightRating).Within(1e-12), "Hidden must also remain neutral when combined with Flashlight");
+                Assert.That(hiddenAttributes.Mods.OfType<OsuModHidden>(), Is.Not.Empty, "Hidden must remain in the difficulty attributes");
+                Assert.That(officialHiddenRating, Is.Not.EqualTo(officialNoHiddenRating).Within(1e-12), "The fixture must exercise Hidden's official Reading bonus");
+                Assert.That(official.Version, Is.EqualTo(KumoriDifficultyCalculator.OfficialDifficultyVersion),
+                    "Update Kumori's cache fingerprint when osu!'s difficulty algorithm changes");
+            });
         }
 
         [Test]

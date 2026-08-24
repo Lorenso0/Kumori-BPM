@@ -46,6 +46,12 @@ internal sealed class StarDatabaseBuilder
         var storage = new NativeStorage(output, null);
 #pragma warning restore CS8625
 
+        IReadOnlyList<string> obsoleteProfiles = KumoriBulkStarRatingPlan.CreateObsoleteBulkProfileKeys(ruleset.RulesetInfo);
+        bool compacted = KumoriStarRatingIndex.DeleteProfiles(storage, obsoleteProfiles, compact: true);
+
+        if (compacted)
+            progress.Report(new BuilderProgress(BuilderStage.Preparing, "Removed and compacted obsolete 102-profile star data.", Total: beatmaps.Count));
+
         KumoriStarRatingIndex.EnsureProfiles(storage, profileKeys);
         KumoriStarRatingIndex.SetProfilesComplete(storage, profileKeys, false, updateMemory: false);
         HashSet<string> indexed = KumoriStarRatingIndex.GetFullyIndexedBeatmapKeys(storage, profileKeys);
@@ -94,31 +100,20 @@ internal sealed class StarDatabaseBuilder
                 beatmap.BeatmapInfo.BPM = sourceBPM;
                 KumoriStarOnlyBatchCalculator calculator = worker.Ruleset.CreateStarOnlyBatchCalculator(new FlatWorkingBeatmap(beatmap));
 
-                for (int profileIndex = 0; profileIndex < worker.Profiles.Count; profileIndex += 2)
+                foreach (BuilderProfile profile in worker.Profiles)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    BuilderProfile noHidden = worker.Profiles[profileIndex];
-                    BuilderProfile hidden = worker.Profiles[profileIndex + 1];
-                    double? noHiddenRating = null;
-                    double? hiddenRating = null;
+                    double? rating = null;
 
                     try
                     {
-                        foreach (KumoriModBPMAdjust bpm in noHidden.Mods.OfType<KumoriModBPMAdjust>())
+                        foreach (KumoriModBPMAdjust bpm in profile.Mods.OfType<KumoriModBPMAdjust>())
                             bpm.SetSourceBPM(sourceBPM);
 
-                        foreach (KumoriModBPMAdjust bpm in hidden.Mods.OfType<KumoriModBPMAdjust>())
-                            bpm.SetSourceBPM(sourceBPM);
+                        rating = calculator.CalculateStarRating(profile.Mods, cancellationToken);
 
-                        KumoriStarRatingPair pair = calculator.CalculatePair(noHidden.Mods, hidden.Mods, cancellationToken);
-                        noHiddenRating = pair.NoHidden;
-                        hiddenRating = pair.Hidden;
-
-                        if (!double.IsFinite(noHiddenRating.Value))
-                            noHiddenRating = null;
-
-                        if (!double.IsFinite(hiddenRating.Value))
-                            hiddenRating = null;
+                        if (!double.IsFinite(rating.Value))
+                            rating = null;
                     }
                     catch (OperationCanceledException)
                     {
@@ -129,8 +124,7 @@ internal sealed class StarDatabaseBuilder
                         mapFailed = true;
                     }
 
-                    worker.Writes.Add(new KumoriStarRatingDatabaseWrite(noHidden.ProfileKey, file.Hash, noHiddenRating, !noHiddenRating.HasValue));
-                    worker.Writes.Add(new KumoriStarRatingDatabaseWrite(hidden.ProfileKey, file.Hash, hiddenRating, !hiddenRating.HasValue));
+                    worker.Writes.Add(new KumoriStarRatingDatabaseWrite(profile.ProfileKey, file.Hash, rating, !rating.HasValue));
                 }
             }
             catch (OperationCanceledException)

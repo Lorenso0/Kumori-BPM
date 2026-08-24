@@ -21,8 +21,8 @@ and branding belong to their respective owners.
   post-mod stars calculated and persisted per BPM/mod setup;
 - SQLite-backed, shareable post-mod indexing with JSON migration, cancellation
   checkpoints, and lock-free cached carousel lookups;
-- a separate resumable map-first builder for exact 220–270 BPM NM and HD ratings
-  using fixed DA AR10/HP0, without running lazer;
+- a separate resumable map-first builder for exact Hidden-neutral 220–270 BPM
+  ratings using fixed DA AR10/HP0, without running lazer;
 - limited active-play compatibility for memory readers: the in-flight score temporarily exposes
   osu!standard's mode ID while preserving BPM Adjust's custom acronym, target, settings, and exact
   playback rate, without mutating osu!'s live ruleset identity;
@@ -101,26 +101,29 @@ For a source-tree run without publishing first:
 The standalone builder:
 
 - calculates every whole-number BPM from 220 through 270, inclusive;
-- calculates both No Mod and Hidden, with DA fixed to AR10/HP0;
-- keeps **Scale map stats with BPM** enabled;
+- calculates Hidden-neutral stars, with DA fixed to AR10/HP0;
+- keeps **Scale map stats with BPM** disabled;
 - loads each unique beatmap hash once, then reuses its difficulty calculator for
-  all 102 profiles;
+  all 51 profiles;
 - uses every processor core and writes results in large SQLite
   transactions;
 - resumes from fully completed maps after cancellation or restart;
 - records unavailable maps as completed work so they do not loop forever.
 
 The result is `kumori-star-ratings.db` in the selected output directory (the
-detected lazer data directory by default. Completed builds checkpoint SQLite's write-ahead
+detected lazer data directory by default). Completed builds checkpoint SQLite's write-ahead
 log into that single file. Close osu! before copying it into the osu! data folder
 or replacing an existing database. Beatmaps are identified by their portable
-file hash, and profile keys include the osu! difficulty-calculator build, so a
-shared database cannot silently reuse incompatible star values. Existing JSON
+file hash, and profile keys include osu!'s difficulty-algorithm version, so patch
+releases can share compatible values without silently reusing incompatible stars. Existing JSON
 profiles under `kumori-star-ratings/` migrate into SQLite when first loaded.
 
 HP and OD do not affect raw osu!standard star rating and therefore do not create
 separate profiles. AR and CS do affect star rating and remain part of the profile
 identity.
+
+Hidden keeps its normal gameplay behaviour but does not change Kumori star rating,
+so No Mod and Hidden share the same exact-rating profile.
 
 Custom rulesets track osu! APIs and may need a rebuild after a client update.
 

@@ -18,8 +18,7 @@ namespace osu.Game.Rulesets.Kumori.BPM
     /// <summary>
     /// Calculates only the exact star values needed by the shared index. A regular difficulty
     /// calculation builds a playable beatmap, difficulty objects, four skills, score simulation,
-    /// and every public attribute for each mod combination. The bulk matrix only needs star rating,
-    /// and its NM/HD pair differs solely in Reading, so Aim, Speed, and all preprocessing are shared.
+    /// and every public attribute for each mod combination. The bulk matrix only needs star rating.
     /// </summary>
     internal sealed class KumoriStarOnlyBatchCalculator : OsuDifficultyCalculator
     {
@@ -33,26 +32,20 @@ namespace osu.Game.Rulesets.Kumori.BPM
             this.workingBeatmap = workingBeatmap;
         }
 
-        public KumoriStarRatingPair CalculatePair(IEnumerable<Mod> noHiddenMods, IEnumerable<Mod> hiddenMods, CancellationToken cancellationToken = default)
+        public double CalculateStarRating(IEnumerable<Mod> mods, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Mod[] noHidden = noHiddenMods.Select(mod => mod.DeepClone()).ToArray();
-            Mod[] hidden = hiddenMods.Select(mod => mod.DeepClone()).ToArray();
-
-            // Hidden only changes object fade timing. Build the Hidden playable map once: Aim,
-            // Speed, and non-Hidden Reading do not consume the altered fade-out value, while
-            // Hidden Reading does. This therefore exactly represents both profiles.
-            IBeatmap beatmap = workingBeatmap.GetPlayableBeatmap(ruleset, hidden, cancellationToken);
+            Mod[] selectedMods = mods.Select(mod => mod.DeepClone()).ToArray();
+            IBeatmap beatmap = workingBeatmap.GetPlayableBeatmap(ruleset, selectedMods, cancellationToken);
 
             if (beatmap.HitObjects.Count == 0)
-                return new KumoriStarRatingPair(0, 0);
+                return 0;
 
-            var aim = new Aim(noHidden, includeSliders: true);
-            var speed = new Speed(noHidden);
-            var reading = new Reading(noHidden);
-            var hiddenReading = new Reading(hidden);
-            Skill[] skills = [aim, speed, reading, hiddenReading];
-            List<DifficultyHitObject> difficultyObjects = SortObjects(CreateDifficultyHitObjects(beatmap, hidden)).ToList();
+            var aim = new Aim(selectedMods, includeSliders: true);
+            var speed = new Speed(selectedMods);
+            var reading = new Reading(KumoriDifficultyCalculator.WithoutHidden(selectedMods));
+            Skill[] skills = [aim, speed, reading];
+            List<DifficultyHitObject> difficultyObjects = SortObjects(CreateDifficultyHitObjects(beatmap, selectedMods)).ToList();
 
             foreach (DifficultyHitObject hitObject in difficultyObjects)
             {
@@ -66,21 +59,12 @@ namespace osu.Game.Rulesets.Kumori.BPM
             double aimRating = DiffUtils.Pow(aim.DifficultyValue(), 0.63) * 0.02275;
             double speedRating = Math.Sqrt(speed.DifficultyValue()) * 0.0675;
             double readingRating = Math.Sqrt(reading.DifficultyValue()) * 0.0675;
-            double hiddenReadingRating = Math.Sqrt(hiddenReading.DifficultyValue()) * 0.0675;
             double baseAimPerformance = OsuPerformanceCalculator.DifficultyToPerformance(aimRating);
             double baseSpeedPerformance = HarmonicSkill.DifficultyToPerformance(speedRating);
-
-            double calculateStarRating(double readingDifficulty)
-            {
-                double baseReadingPerformance = HarmonicSkill.DifficultyToPerformance(readingDifficulty);
-                double basePerformance = DiffUtils.Norm(OsuPerformanceCalculator.PERFORMANCE_NORM_EXPONENT,
-                    baseAimPerformance, baseSpeedPerformance, baseReadingPerformance);
-                return Math.Cbrt(basePerformance * OsuPerformanceCalculator.PERFORMANCE_BASE_MULTIPLIER);
-            }
-
-            return new KumoriStarRatingPair(calculateStarRating(readingRating), calculateStarRating(hiddenReadingRating));
+            double baseReadingPerformance = HarmonicSkill.DifficultyToPerformance(readingRating);
+            double basePerformance = DiffUtils.Norm(OsuPerformanceCalculator.PERFORMANCE_NORM_EXPONENT,
+                baseAimPerformance, baseSpeedPerformance, baseReadingPerformance);
+            return Math.Cbrt(basePerformance * OsuPerformanceCalculator.PERFORMANCE_BASE_MULTIPLIER);
         }
     }
-
-    internal readonly record struct KumoriStarRatingPair(double NoHidden, double Hidden);
 }

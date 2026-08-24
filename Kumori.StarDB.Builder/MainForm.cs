@@ -28,9 +28,17 @@ internal sealed class MainForm : Form
     private readonly TextBox log = new TextBox();
     private CancellationTokenSource? cancellation;
     private bool closeWhenStopped;
+    private readonly string? initialInput;
+    private readonly string? initialOutput;
+    private readonly int? initialWorkers;
+    private readonly bool autoStart;
 
-    public MainForm()
+    public MainForm(string? initialInput = null, string? initialOutput = null, int? initialWorkers = null, bool autoStart = false)
     {
+        this.initialInput = initialInput;
+        this.initialOutput = initialOutput;
+        this.initialWorkers = initialWorkers;
+        this.autoStart = autoStart;
         Text = "Kumori Star Database Builder";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(760, 600);
@@ -66,7 +74,7 @@ internal sealed class MainForm : Form
         var subtitle = new Label
         {
             AutoSize = true,
-            Text = "220–270 BPM  •  No Mod + Hidden  •  DA AR10 / HP0  •  102 exact profiles",
+            Text = "220–270 BPM  •  Stat scaling off  •  DA AR10 / HP0  •  51 exact profiles",
             ForeColor = Color.FromArgb(80, 89, 105),
             Margin = new Padding(0, 0, 0, 20),
         };
@@ -90,7 +98,22 @@ internal sealed class MainForm : Form
         root.Controls.Add(createButtons(), 0, 8);
         Controls.Add(root);
 
-        Shown += (_, _) => detectDefaults();
+        Shown += async (_, _) =>
+        {
+            detectDefaults();
+
+            if (!string.IsNullOrWhiteSpace(this.initialInput))
+                inputPath.Text = this.initialInput;
+
+            if (!string.IsNullOrWhiteSpace(this.initialOutput))
+                outputPath.Text = this.initialOutput;
+
+            if (this.initialWorkers.HasValue)
+                workers.Value = Math.Clamp(this.initialWorkers.Value, (int)workers.Minimum, (int)workers.Maximum);
+
+            if (this.autoStart)
+                await start();
+        };
         FormClosing += onFormClosing;
     }
 

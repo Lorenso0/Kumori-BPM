@@ -189,6 +189,39 @@ namespace osu.Game.Rulesets.Kumori.BPM
             }
         }
 
+        public static bool DeleteProfiles(Storage storage, IReadOnlyCollection<string> profileKeys, bool compact)
+        {
+            if (profileKeys.Count == 0)
+                return false;
+
+            lock (databaseLock)
+            {
+                using DatabaseConnection connection = open(storage);
+                bool deleted = false;
+
+                connection.Transaction(() =>
+                {
+                    using var statement = connection.Prepare("DELETE FROM profiles WHERE profile_key = ?");
+
+                    foreach (string profileKey in profileKeys)
+                    {
+                        statement.BindText(1, profileKey);
+                        statement.Execute();
+                        deleted |= connection.Changes > 0;
+                        statement.Reset();
+                    }
+                });
+
+                if (deleted && compact)
+                {
+                    connection.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
+                    connection.Execute("VACUUM");
+                }
+
+                return deleted;
+            }
+        }
+
         private static DatabaseConnection open(Storage storage)
         {
             string path = storage.GetFullPath(Filename, true);
@@ -303,6 +336,8 @@ namespace osu.Game.Rulesets.Kumori.BPM
                     throw new InvalidDataException($"Kumori star database operation failed: {getErrorMessage()} ({result}).");
             }
 
+            public int Changes => Native.sqlite3_changes(handle);
+
             private string getErrorMessage() => handle == IntPtr.Zero ? "Unknown SQLite error" : Marshal.PtrToStringUTF8(Native.sqlite3_errmsg(handle)) ?? "Unknown SQLite error";
 
             public void Dispose()
@@ -400,6 +435,9 @@ namespace osu.Game.Rulesets.Kumori.BPM
 
             [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr sqlite3_errmsg(IntPtr database);
+
+            [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
+            public static extern int sqlite3_changes(IntPtr database);
 
             [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
             public static extern int sqlite3_exec(IntPtr database, [MarshalAs(UnmanagedType.LPUTF8Str)] string sql, IntPtr callback, IntPtr argument, out IntPtr error);
