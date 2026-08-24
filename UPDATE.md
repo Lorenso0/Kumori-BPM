@@ -90,6 +90,6 @@ osu!lazer client.
 5. Report the commit, tag, release URL, workflow URL, asset URLs, test result,
    DLL size, and verified SHA-256 hash to the user.
 
-`UPDATE.md` is this private operational trigger/runbook. It must never be used
+`UPDATE.md` is this maintainer operational trigger/runbook. It must never be used
 as the public GitHub Release notes. Release notes are generated from the commits
 included since the previous tag.
