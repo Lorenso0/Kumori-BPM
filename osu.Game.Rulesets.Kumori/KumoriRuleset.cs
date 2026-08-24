@@ -45,10 +45,20 @@ namespace osu.Game.Rulesets.Kumori
     /// </summary>
     public class KumoriRuleset : Ruleset
     {
+        private const string tachyon_ruleset_api_version = "2026.818.0";
+
         private readonly OsuRuleset osu = new OsuRuleset();
         private readonly TosuCompatibilityIdentity tosuCompatibility = new TosuCompatibilityIdentity();
 
-        public override string RulesetAPIVersionSupported => CURRENT_RULESET_API_VERSION;
+        /// <summary>
+        /// Stable and Tachyon currently expose different ruleset API versions. The stable NuGet package cannot
+        /// reference Tachyon's new API members directly, so use the renamed variants property as a runtime feature
+        /// check and report the matching version to the host ruleset loader.
+        /// </summary>
+        public override string RulesetAPIVersionSupported => ResolveRulesetApiVersion(typeof(Ruleset).GetProperty("GameplayVariants") != null);
+
+        internal static string ResolveRulesetApiVersion(bool supportsGameplayVariants) =>
+            supportsGameplayVariants ? tachyon_ruleset_api_version : CURRENT_RULESET_API_VERSION;
 
         public override string Description => "Kumori";
 

@@ -50,6 +50,17 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
+        public void TestRulesetApiVersionMatchesHostGeneration()
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(KumoriRuleset.ResolveRulesetApiVersion(false), Is.EqualTo(Ruleset.CURRENT_RULESET_API_VERSION));
+                Assert.That(KumoriRuleset.ResolveRulesetApiVersion(true), Is.EqualTo("2026.818.0"));
+                Assert.That(new KumoriRuleset().RulesetAPIVersionSupported, Is.EqualTo(Ruleset.CURRENT_RULESET_API_VERSION));
+            });
+        }
+
+        [Test]
         public void TestOfficialOsuModsArePreservedAndBPMIsAdded()
         {
             var kumori = new KumoriRuleset();

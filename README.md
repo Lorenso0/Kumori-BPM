@@ -3,7 +3,8 @@
 `osu.Game.Rulesets.Kumori` is an external custom ruleset for official osu!lazer.
 It delegates the complete playfield, hit objects, scoring, input, skinning, editor,
 and difficulty implementation to the official osu! ruleset, then adds Kumori's
-target-BPM mod on top.
+target-BPM mod on top. The same DLL supports both the normal release stream and
+Tachyon by selecting the matching ruleset API at runtime.
 
 This project is not affiliated with or endorsed by ppy Pty Ltd. The osu! name
 and branding belong to their respective owners.
