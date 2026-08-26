@@ -13,6 +13,7 @@ using osu.Framework.Utils;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Graphics;
+using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Osu.Scoring;
@@ -26,6 +27,8 @@ namespace osu.Game.Rulesets.Kumori.BPM
         private const double minimum_supported_tempo = 0.05;
         private const double recommended_minimum_tempo = 0.75;
         private const double recommended_maximum_tempo = 1.5;
+
+        internal const string SPECTATOR_MARKER_SETTING = "kumori_spectator";
 
         public override string Name => "BPM Adjust";
         public override string Acronym => "BPM";
@@ -67,6 +70,12 @@ namespace osu.Game.Rulesets.Kumori.BPM
         [SettingSource("Scale map stats with BPM", "Scale rate-sensitive map stats like Double Time and Half Time")]
         public BindableBool ScaleMapStatsWithBPM { get; } = new BindableBool(true);
 
+        // osu!'s spectator server only accepts the four built-in numeric mode IDs. This hidden,
+        // non-default setting survives APIMod transport and lets a viewer with Kumori installed
+        // restore the custom ruleset locally before spectator gameplay is constructed.
+        [SettingSource("", "", SettingControlType = typeof(SettingsKumoriSpectatorMarker))]
+        public BindableBool KumoriSpectator { get; } = new BindableBool();
+
         public BindableNumber<double> SpeedChange { get; } = new BindableDouble(1)
         {
             MinValue = double.Epsilon,
@@ -86,6 +95,7 @@ namespace osu.Game.Rulesets.Kumori.BPM
 
         public KumoriModBPMAdjust()
         {
+            KumoriSpectator.Value = true;
             TargetBPM.BindValueChanged(_ => updateSpeedChange());
             SpeedChange.BindValueChanged(_ => updateAudioAdjustments());
             AudioMode.BindValueChanged(_ => updateAudioAdjustments(), true);
@@ -366,5 +376,17 @@ namespace osu.Game.Rulesets.Kumori.BPM
 
         [Description("Preserve Pitch")]
         PreservePitch,
+    }
+
+    /// <summary>
+    /// Keeps the transport-only spectator marker out of the mod settings layout.
+    /// </summary>
+    public partial class SettingsKumoriSpectatorMarker : SettingsCheckbox
+    {
+        public SettingsKumoriSpectatorMarker()
+        {
+            Alpha = 0;
+            CanBeShown.Value = false;
+        }
     }
 }

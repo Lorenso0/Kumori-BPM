@@ -1007,6 +1007,41 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
+        public void TestSpectatorTransportRestoresKumoriLocally()
+        {
+            var bpm = new KumoriModBPMAdjust { TargetBPM = { Value = 180 } };
+            APIMod apiMod = new APIMod(bpm);
+            var state = new osu.Game.Online.Spectator.SpectatorState
+            {
+                RulesetID = 0,
+                Mods = [apiMod],
+            };
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(apiMod.Settings[KumoriModBPMAdjust.SPECTATOR_MARKER_SETTING], Is.EqualTo(true));
+                Assert.That(KumoriRulesetIcon.TryRestoreKumoriSpectatorState(state), Is.True);
+                Assert.That(state.RulesetID, Is.EqualTo(-1));
+            });
+        }
+
+        [Test]
+        public void TestSpectatorTransportDoesNotClaimOrdinaryOsuBPMMod()
+        {
+            var state = new osu.Game.Online.Spectator.SpectatorState
+            {
+                RulesetID = 0,
+                Mods = [new APIMod { Acronym = "BPM", Settings = { ["target_bpm"] = 180d } }],
+            };
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(KumoriRulesetIcon.TryRestoreKumoriSpectatorState(state), Is.False);
+                Assert.That(state.RulesetID, Is.EqualTo(0));
+            });
+        }
+
+        [Test]
         public void TestClearedTargetRemainsNeutralWhenBeatmapChanges()
         {
             var beatmap = new Beatmap<OsuHitObject>();
@@ -1032,7 +1067,7 @@ namespace osu.Game.Rulesets.Kumori.Tests
 
             Assert.Multiple(() =>
             {
-                Assert.That(controls, Has.Length.EqualTo(7));
+                Assert.That(controls.Count(control => control.IsPresent), Is.EqualTo(7));
                 Assert.That(controls[0], Is.TypeOf<SettingsBPMStarFilterControl>());
                 Assert.That(controls, Has.Some.TypeOf<SettingsBPMControl>());
                 Assert.That(controls, Has.Some.TypeOf<SettingsBPMAudioMode>());

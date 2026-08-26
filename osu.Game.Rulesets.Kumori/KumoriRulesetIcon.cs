@@ -2,14 +2,18 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Linq;
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
+using osu.Game.Online.Spectator;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
+using osu.Game.Rulesets.Kumori.BPM;
 using osu.Game.Rulesets.Kumori.Updates;
 using osuTK;
 using osuTK.Graphics;
@@ -23,6 +27,7 @@ namespace osu.Game.Rulesets.Kumori
     public partial class KumoriRulesetIcon : CompositeDrawable
     {
         private IDisposable? updateNotificationSubscription;
+        private readonly IBindableDictionary<int, SpectatorState> spectatorStates = new BindableDictionary<int, SpectatorState>();
 
         public KumoriRulesetIcon()
         {
@@ -57,10 +62,42 @@ namespace osu.Game.Rulesets.Kumori
         }
 
         [BackgroundDependencyLoader]
-        private void load(INotificationOverlay notifications)
+        private void load(INotificationOverlay notifications, SpectatorClient spectatorClient)
         {
             updateNotificationSubscription = KumoriUpdateNotificationBus.Attach(message =>
                 Schedule(() => notifications.Post(new SimpleNotification { Text = message })));
+
+            // The toolbar creates and keeps one icon for every installed ruleset, even while osu!
+            // is selected. Bind before a spectator screen is opened so marked incoming states are
+            // rewritten to Kumori before that screen resolves the numeric ruleset ID.
+            spectatorStates.BindTo(spectatorClient.WatchedUserStates);
+            spectatorStates.BindCollectionChanged(onSpectatorStatesChanged, true);
+        }
+
+        private void onSpectatorStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<int, SpectatorState> change)
+        {
+            if (change.NewItems == null)
+                return;
+
+            foreach ((_, SpectatorState state) in change.NewItems)
+                TryRestoreKumoriSpectatorState(state);
+        }
+
+        internal static bool TryRestoreKumoriSpectatorState(SpectatorState state)
+        {
+            if (state.RulesetID != 0)
+                return false;
+
+            bool isKumori = state.Mods.Any(mod =>
+                mod.Acronym == "BPM"
+                && mod.Settings.TryGetValue(KumoriModBPMAdjust.SPECTATOR_MARKER_SETTING, out object? marker)
+                && marker is true);
+
+            if (!isKumori)
+                return false;
+
+            state.RulesetID = -1;
+            return true;
         }
 
         protected override void Dispose(bool isDisposing)

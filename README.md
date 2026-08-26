@@ -31,6 +31,8 @@ and branding belong to their respective owners.
 - limited active-play compatibility for memory readers: the in-flight score temporarily exposes
   osu!standard's mode ID while preserving BPM Adjust's custom acronym, target, settings, and exact
   playback rate, without mutating osu!'s live ruleset identity;
+- Kumori-to-Kumori spectating through osu!'s built-in spectator service, with the custom ruleset
+  restored locally before the spectator player loads (both clients must run the updated ruleset);
 - local score, replay, and personal-preset serialisation through normal mod settings;
 - all standard osu! mods alongside BPM Adjust.
 
