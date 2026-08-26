@@ -35,7 +35,9 @@ osu!lazer client.
 4. Inspect the latest `ruleset-v*` tag. Unless the user specifies a version,
    increment its semantic-version patch component (for example,
    `ruleset-v1.2.3` becomes `ruleset-v1.2.4`).
-5. Confirm that the chosen tag does not exist locally or remotely.
+5. Set the ruleset project's `<Version>` to the exact version portion of the
+   chosen tag. The running ruleset uses this value for automatic update checks.
+6. Confirm that the chosen tag does not exist locally or remotely.
 
 ## 2. Validate
 

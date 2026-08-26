@@ -17,6 +17,7 @@ using osu.Game.Rulesets.Difficulty;
 using osu.Game.Rulesets.Edit;
 using osu.Game.Rulesets.Filter;
 using osu.Game.Rulesets.Kumori.BPM;
+using osu.Game.Rulesets.Kumori.Updates;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Rulesets.Osu.Beatmaps;
@@ -49,6 +50,11 @@ namespace osu.Game.Rulesets.Kumori
 
         private readonly OsuRuleset osu = new OsuRuleset();
         private readonly TosuCompatibilityIdentity tosuCompatibility = new TosuCompatibilityIdentity();
+
+        public KumoriRuleset()
+        {
+            KumoriAutoUpdater.StartIfInstalled();
+        }
 
         /// <summary>
         /// Stable and Tachyon currently expose different ruleset API versions. The stable NuGet package cannot
@@ -172,7 +178,26 @@ namespace osu.Game.Rulesets.Kumori
         public override IEnumerable<RulesetBeatmapAttribute> GetBeatmapAttributesForDisplay(IBeatmapInfo beatmapInfo, IReadOnlyCollection<Mod> mods)
         {
             prepareBeatmapDependentMods(beatmapInfo, mods);
-            return base.GetBeatmapAttributesForDisplay(beatmapInfo, mods);
+
+            foreach (RulesetBeatmapAttribute attribute in base.GetBeatmapAttributesForDisplay(beatmapInfo, mods))
+            {
+                // Song select gives every statistic the width of the longest label. Compact stock
+                // labels leave enough room for all seven values without triggering its tall fallback.
+                yield return new RulesetBeatmapAttribute(attribute.Acronym, attribute.Acronym, attribute.OriginalValue, attribute.AdjustedValue, attribute.MaxValue)
+                {
+                    Description = attribute.Label,
+                    AdditionalMetrics = attribute.AdditionalMetrics,
+                    ValueFormat = attribute.ValueFormat,
+                };
+            }
+
+            float originalStarRating = (float)beatmapInfo.StarRating;
+            float originalBPM = (float)KumoriBPMResolver.FromBeatmapInfo(beatmapInfo);
+            float playRate = (float)(mods.OfType<KumoriModBPMAdjust>().SingleOrDefault()?.SpeedChange.Value ?? 1);
+
+            yield return new RulesetBeatmapAttribute("OG SR", "SR", originalStarRating, originalStarRating, 10);
+            yield return new RulesetBeatmapAttribute("OG BPM", "BPM", originalBPM, originalBPM, 400);
+            yield return new RulesetBeatmapAttribute("Rate ×", "RT", playRate, playRate, 2);
         }
 
         public override bool EditorShowScrollSpeed => osu.EditorShowScrollSpeed;
@@ -182,5 +207,6 @@ namespace osu.Game.Rulesets.Kumori
             foreach (KumoriModBPMAdjust bpm in mods.OfType<KumoriModBPMAdjust>())
                 bpm.SetSourceBPM(KumoriBPMResolver.FromBeatmapInfo(beatmapInfo));
         }
+
     }
 }

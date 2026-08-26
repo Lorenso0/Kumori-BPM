@@ -18,6 +18,10 @@ and branding belong to their respective owners.
 - independent Nightcore or metronome beat accents;
 - hitsounds which follow playback rate, music pitch, or preserve pitch;
 - optional DT/HT-style AR and OD scaling;
+- compact, always-visible CS, AR, OD, HP, OG SR, OG BPM, and BPM Adjust play-rate
+  statistics in normal song select;
+- automatic Windows updates from verified `Lorenso0/Kumori-BPM` GitHub Releases,
+  staged while osu! is open and installed after it closes with a recoverable DLL backup;
 - a global inclusive star-range song filter using imported pre-mod stars or exact
   post-mod stars calculated and persisted per BPM/mod setup;
 - SQLite-backed, shareable post-mod indexing with JSON migration, cancellation
@@ -49,6 +53,15 @@ directory inside the official osu! data folder. In osu!, open Settings and use
 already exist, replace any older Kumori DLL, then restart the official client
 and select **Kumori** from the ruleset icons.
 
+On Windows, that first manual installation enables automatic updates. Kumori
+checks the repository's latest non-prerelease GitHub Release at most once every
+six hours, requires the DLL and its SHA-256 asset to agree, and stages a verified
+replacement while osu! remains open. A hidden helper installs it after osu!
+closes; an in-game notification announces that the update is ready, and the next
+launch confirms successful installation. The previous DLL remains available as
+`osu.Game.Rulesets.Kumori.dll.bak`. Create an empty
+`rulesets/.kumori-auto-update.disabled` file to opt out.
+
 ## Build from source
 
 Run:
@@ -66,7 +79,9 @@ are available to the custom ruleset. The setting is remembered by osu!.
 
 The star-range controls are inside **Mods → BPM Adjust**. Pre-mod filtering is
 immediate. For post-mod filtering, press **Calculate maps** once for each new
-BPM/mod setup; the exact profile is reused in later sessions.
+BPM/mod setup; the exact profile is reused in later sessions. Maps imported after
+an index was created stay out of the filtered list until **Calculate maps** is run
+again, preventing unindexed out-of-range maps from leaking into the results.
 
 ## Shared 220–270 star database
 

@@ -57,7 +57,6 @@ namespace osu.Game.Rulesets.Kumori.BPM
             private Storage storage = null!;
             private RealmAccess realm = null!;
             private BeatmapManager beatmapManager = null!;
-            private KumoriDifficultyCacheReader difficultyCache = null!;
 
             [Resolved]
             private IBindable<RulesetInfo> selectedRuleset { get; set; } = null!;
@@ -171,12 +170,11 @@ namespace osu.Game.Rulesets.Kumori.BPM
             }
 
             [BackgroundDependencyLoader]
-            private void load(Storage storage, RealmAccess realm, BeatmapManager beatmapManager, BeatmapDifficultyCache difficultyCache)
+            private void load(Storage storage, RealmAccess realm, BeatmapManager beatmapManager)
             {
                 this.storage = storage;
                 this.realm = realm;
                 this.beatmapManager = beatmapManager;
-                this.difficultyCache = new KumoriDifficultyCacheReader(difficultyCache);
                 mod = getMod();
 
                 if (mod == null)
@@ -350,13 +348,11 @@ namespace osu.Game.Rulesets.Kumori.BPM
                                 foreach (KumoriModBPMAdjust bpm in worker.Mods.OfType<KumoriModBPMAdjust>())
                                     bpm.SetSourceBPM(BPMResolver.FromBeatmapInfo(item.Beatmap));
 
-                                if (difficultyCache.TryGet(item.Beatmap, rulesetInfo, worker.Mods, out double cachedRating))
-                                    rating = cachedRating;
-                                else
-                                {
-                                    WorkingBeatmap workingBeatmap = beatmapManager.GetWorkingBeatmap(item.Beatmap);
-                                    rating = worker.Ruleset.CreateDifficultyCalculator(workingBeatmap).Calculate(worker.Mods, cancellationToken).StarRating;
-                                }
+                                // Always calculate against this beatmap after rebinding BPM. The
+                                // shared osu! cache does not include BPM Adjust's derived source BPM
+                                // in its mod key and can therefore contain a rating for the wrong rate.
+                                WorkingBeatmap workingBeatmap = beatmapManager.GetWorkingBeatmap(item.Beatmap);
+                                rating = worker.Ruleset.CreateDifficultyCalculator(workingBeatmap).Calculate(worker.Mods, cancellationToken).StarRating;
 
                                 if (!double.IsFinite(rating.Value))
                                     rating = null;
@@ -591,6 +587,10 @@ namespace osu.Game.Rulesets.Kumori.BPM
                 calculationCancellation?.Cancel();
                 calculationCancellation?.Dispose();
                 settingChangeTracker?.Dispose();
+
+                if (trackedProfileKey != null)
+                    KumoriStarFilterState.ClearIfCurrentProfileMatches(trackedProfileKey);
+
                 base.Dispose(isDisposing);
             }
 

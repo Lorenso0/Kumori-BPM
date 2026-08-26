@@ -12,6 +12,7 @@ using osu.Game.Beatmaps.ControlPoints;
 using osu.Game.Configuration;
 using osu.Game.Online.API;
 using osu.Game.Rulesets.Kumori.BPM;
+using osu.Game.Rulesets.Kumori.Updates;
 using osu.Game.Rulesets.Difficulty;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
@@ -285,6 +286,48 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
+        public void TestPostModStarRangeRejectsUnknownMapsOnceIndexIsLoaded()
+        {
+            using var storage = new TemporaryNativeStorage("kumori-star-filter-unknown-map-test");
+            KumoriStarRatingIndex.ClearMemory();
+            KumoriStarFilterState.Clear();
+
+            try
+            {
+                var mod = new KumoriModBPMAdjust
+                {
+                    TargetBPM = { Value = 180 },
+                    StarFilterMode = { Value = KumoriStarRatingFilterMode.PostMod },
+                    StarFilterMinimum = { Value = "6" },
+                    StarFilterMaximum = { Value = "7" },
+                };
+                var ruleset = new KumoriRuleset();
+                var indexed = new BeatmapInfo { Hash = "indexed" };
+                var unknown = new BeatmapInfo { Hash = "unknown", StarRating = 12 };
+                string profileKey = KumoriStarRatingIndex.CreateProfileKey(ruleset.RulesetInfo, [mod]);
+
+                KumoriStarRatingIndex.Store(storage, profileKey, new System.Collections.Generic.Dictionary<string, double>
+                {
+                    [KumoriStarRatingIndex.CreateBeatmapKey(indexed)] = 6.5,
+                }, [], complete: false);
+
+                var criteria = new FilterCriteria { Ruleset = ruleset.RulesetInfo, Mods = [mod] };
+                var filter = new KumoriRulesetFilterCriteria();
+
+                Assert.Multiple(() =>
+                {
+                    Assert.That(filter.Matches(indexed, criteria), Is.True);
+                    Assert.That(filter.Matches(unknown, criteria), Is.False);
+                });
+            }
+            finally
+            {
+                KumoriStarFilterState.Clear();
+                KumoriStarRatingIndex.ClearMemory();
+            }
+        }
+
+        [Test]
         public void TestActiveStarFilterStateOverridesStaleSelectedModCopy()
         {
             using var storage = new TemporaryNativeStorage("kumori-active-star-filter-test");
@@ -392,6 +435,33 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
+        public void TestStaleFilterControlCannotClearNewActiveProfile()
+        {
+            KumoriStarFilterState.Clear();
+            var ruleset = new KumoriRuleset();
+            var mod = new KumoriModBPMAdjust { TargetBPM = { Value = 180 } };
+            string profileKey = KumoriStarRatingIndex.CreateProfileKey(ruleset.RulesetInfo, [mod]);
+
+            try
+            {
+                KumoriStarFilterState.Publish(ruleset.RulesetInfo, [mod], KumoriStarRatingFilterMode.PostMod, "6", "7");
+
+                Assert.Multiple(() =>
+                {
+                    Assert.That(KumoriStarFilterState.ClearIfCurrentProfileMatches("stale-profile"), Is.False);
+                    Assert.That(KumoriStarFilterState.TryGet(out string activeProfile, out _, out _), Is.True);
+                    Assert.That(activeProfile, Is.EqualTo(profileKey));
+                    Assert.That(KumoriStarFilterState.ClearIfCurrentProfileMatches(profileKey), Is.True);
+                    Assert.That(KumoriStarFilterState.TryGet(out _, out _, out _), Is.False);
+                });
+            }
+            finally
+            {
+                KumoriStarFilterState.Clear();
+            }
+        }
+
+        [Test]
         public void TestPostModWorkPlanReusesCompletedMapsAndResumesPartialProfiles()
         {
             var completeMap = new BeatmapInfo { Hash = "complete" };
@@ -450,6 +520,8 @@ namespace osu.Game.Rulesets.Kumori.Tests
 
             Assert.Multiple(() =>
             {
+                Assert.That(BPMSongSelectSynchroniser.ContainsBPMAdjust([selectedMod]), Is.True);
+                Assert.That(BPMSongSelectSynchroniser.ContainsBPMAdjust([new OsuModHidden()]), Is.False);
                 Assert.That(controlMod.SourceBPM, Is.EqualTo(120));
                 Assert.That(selectedMod.SourceBPM, Is.EqualTo(120));
                 Assert.That(controlMod.SpeedChange.Value, Is.EqualTo(1.5));
@@ -503,6 +575,30 @@ namespace osu.Game.Rulesets.Kumori.Tests
             {
                 Assert.That(mod.SourceBPM, Is.EqualTo(120));
                 Assert.That(mod.SpeedChange.Value, Is.EqualTo(1.5));
+            });
+        }
+
+        [Test]
+        public void TestNormalSongSelectShowsCompactNativeAndOriginalMapStatistics()
+        {
+            var beatmap = new BeatmapInfo
+            {
+                StarRating = 4.45,
+                BPM = 150,
+            };
+            var bpm = new KumoriModBPMAdjust { TargetBPM = { Value = 195 } };
+            RulesetBeatmapAttribute[] attributes = new KumoriRuleset().GetBeatmapAttributesForDisplay(beatmap, [bpm]).ToArray();
+            RulesetBeatmapAttribute originalStars = attributes.Single(attribute => attribute.Label.ToString() == "OG SR");
+            RulesetBeatmapAttribute originalBPM = attributes.Single(attribute => attribute.Label.ToString() == "OG BPM");
+            RulesetBeatmapAttribute playRate = attributes.Single(attribute => attribute.Label.ToString() == "Rate ×");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(attributes, Has.Length.EqualTo(7));
+                Assert.That(attributes.Select(attribute => attribute.Label.ToString()), Is.EqualTo(new[] { "CS", "AR", "OD", "HP", "OG SR", "OG BPM", "Rate ×" }));
+                Assert.That(originalStars.AdjustedValue, Is.EqualTo(4.45).Within(0.001));
+                Assert.That(originalBPM.AdjustedValue, Is.EqualTo(150));
+                Assert.That(playRate.AdjustedValue, Is.EqualTo(1.3).Within(0.001));
             });
         }
 
@@ -799,11 +895,16 @@ namespace osu.Game.Rulesets.Kumori.Tests
             const string profileKey = "json-profile";
             var beatmap = new BeatmapInfo { ID = System.Guid.NewGuid(), Hash = "portable-json-hash" };
             string legacyKey = $"{beatmap.ID:N}:{beatmap.Hash}";
+            string duplicateLegacyKey = $"{System.Guid.NewGuid():N}:{beatmap.Hash}";
             string json = JsonConvert.SerializeObject(new
             {
                 version = 2,
-                ratings = new System.Collections.Generic.Dictionary<string, double> { [legacyKey] = 6.75 },
-                unavailable_beatmaps = System.Array.Empty<string>(),
+                ratings = new System.Collections.Generic.Dictionary<string, double>
+                {
+                    [legacyKey] = 6.75,
+                    [duplicateLegacyKey] = 6.75,
+                },
+                unavailable_beatmaps = new[] { legacyKey, duplicateLegacyKey },
                 complete = true,
             });
 
@@ -951,6 +1052,171 @@ namespace osu.Game.Rulesets.Kumori.Tests
                 Assert.That(ruleset.CreateIcon(), Is.TypeOf<KumoriRulesetIcon>());
                 Assert.That(selectionSample, Is.Not.Null.And.Length.GreaterThan(1000));
             });
+        }
+
+        [Test]
+        public void TestAutoUpdaterRecognisesOnlyInstalledRulesetPath()
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(KumoriAutoUpdater.IsInstalledRulesetPath(@"D:\Games\osu!lazer\rulesets\osu.Game.Rulesets.Kumori.dll"), Is.True);
+                Assert.That(KumoriAutoUpdater.IsInstalledRulesetPath(@"D:\build\bin\osu.Game.Rulesets.Kumori.dll"), Is.False);
+                Assert.That(KumoriAutoUpdater.IsInstalledRulesetPath(@"D:\Games\osu!lazer\rulesets\osu.Game.Rulesets.Kumori.dll.pending"), Is.False);
+            });
+        }
+
+        [Test]
+        public void TestAutoUpdaterParsesReleaseVersionsAndChecksums()
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(KumoriAutoUpdater.TryParseReleaseVersion("ruleset-v1.2.3", out System.Version version), Is.True);
+                Assert.That(version, Is.EqualTo(new System.Version(1, 2, 3)));
+                Assert.That(KumoriAutoUpdater.TryParseReleaseVersion("ruleset-v2.0.1+build.5", out _), Is.True);
+                Assert.That(KumoriAutoUpdater.TryParseReleaseVersion("v1.2.3", out _), Is.False);
+                Assert.That(KumoriAutoUpdater.TryReadChecksum(new string('a', 64) + " *osu.Game.Rulesets.Kumori.dll", out string checksum), Is.True);
+                Assert.That(checksum, Is.EqualTo(new string('a', 64)));
+                Assert.That(KumoriAutoUpdater.TryReadChecksum("not-a-checksum", out _), Is.False);
+            });
+        }
+
+        [Test]
+        public void TestAutoUpdaterAcceptsOnlyNewVerifiedGitHubReleaseShape()
+        {
+            const string release = """
+                {
+                  "tag_name": "ruleset-v1.2.4",
+                  "draft": false,
+                  "prerelease": false,
+                  "assets": [
+                    {
+                      "name": "osu.Game.Rulesets.Kumori.dll",
+                      "browser_download_url": "https://github.com/Lorenso0/Kumori-BPM/releases/download/ruleset-v1.2.4/osu.Game.Rulesets.Kumori.dll",
+                      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    },
+                    {
+                      "name": "osu.Game.Rulesets.Kumori.dll.sha256",
+                      "browser_download_url": "https://github.com/Lorenso0/Kumori-BPM/releases/download/ruleset-v1.2.4/osu.Game.Rulesets.Kumori.dll.sha256"
+                    }
+                  ]
+                }
+                """;
+
+            KumoriUpdateCandidate? candidate = KumoriAutoUpdater.ParseCandidate(release, new System.Version(1, 2, 3));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(candidate, Is.Not.Null);
+                Assert.That(candidate!.Version, Is.EqualTo(new System.Version(1, 2, 4)));
+                Assert.That(candidate.RulesetUri.Host, Is.EqualTo("github.com"));
+                Assert.That(candidate.GitHubDigest, Is.EqualTo(new string('a', 64)));
+                Assert.That(KumoriAutoUpdater.ParseCandidate(release, new System.Version(1, 2, 4)), Is.Null);
+                Assert.That(KumoriAutoUpdater.ParseCandidate(release.Replace("github.com", "example.com"), new System.Version(1, 2, 3)), Is.Null);
+            });
+        }
+
+        [Test]
+        public void TestUpdateNotificationsQueueUntilUiAttaches()
+        {
+            KumoriUpdateNotificationBus.ResetForTesting();
+            var firstMessages = new System.Collections.Generic.List<string>();
+            var secondMessages = new System.Collections.Generic.List<string>();
+
+            try
+            {
+                KumoriUpdateNotificationBus.Post("ready");
+
+                using (KumoriUpdateNotificationBus.Attach(firstMessages.Add))
+                {
+                    KumoriUpdateNotificationBus.Post("installed");
+                    Assert.That(firstMessages, Is.EqualTo(new[] { "ready", "installed" }));
+                }
+
+                KumoriUpdateNotificationBus.Post("queued again");
+
+                using (KumoriUpdateNotificationBus.Attach(secondMessages.Add))
+                    Assert.That(secondMessages, Is.EqualTo(new[] { "queued again" }));
+            }
+            finally
+            {
+                KumoriUpdateNotificationBus.ResetForTesting();
+            }
+        }
+
+        [Test]
+        public void TestAutoUpdaterHelperWaitsThenReplacesWithBackup()
+        {
+            if (!System.OperatingSystem.IsWindows())
+                Assert.Ignore("The installed updater helper is Windows-specific.");
+
+            string directory = Path.Combine(Path.GetTempPath(), $"kumori-updater-test-{System.Guid.NewGuid():N}");
+            Directory.CreateDirectory(directory);
+
+            try
+            {
+                string target = Path.Combine(directory, "osu.Game.Rulesets.Kumori.dll");
+                string staged = Path.Combine(directory, ".kumori-update-test.dll.pending");
+                string script = Path.Combine(directory, "updater.ps1");
+                byte[] original = System.Text.Encoding.UTF8.GetBytes("original ruleset");
+                byte[] updated = System.Text.Encoding.UTF8.GetBytes("updated ruleset");
+                string expectedHash = System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(updated));
+                File.WriteAllBytes(target, original);
+                File.WriteAllBytes(staged, updated);
+                File.WriteAllText(script, KumoriAutoUpdater.ReplacementScriptForTesting);
+
+                string powershell = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe");
+                using var waitedProcess = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = powershell,
+                    Arguments = "-NoProfile -Command \"Start-Sleep -Seconds 1\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                })!;
+
+                var helperInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = powershell,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                helperInfo.ArgumentList.Add("-NoProfile");
+                helperInfo.ArgumentList.Add("-ExecutionPolicy");
+                helperInfo.ArgumentList.Add("Bypass");
+                helperInfo.ArgumentList.Add("-File");
+                helperInfo.ArgumentList.Add(script);
+                helperInfo.ArgumentList.Add("-ProcessId");
+                helperInfo.ArgumentList.Add(waitedProcess.Id.ToString());
+                helperInfo.ArgumentList.Add("-StagedDll");
+                helperInfo.ArgumentList.Add(staged);
+                helperInfo.ArgumentList.Add("-TargetDll");
+                helperInfo.ArgumentList.Add(target);
+                helperInfo.ArgumentList.Add("-ExpectedHash");
+                helperInfo.ArgumentList.Add(expectedHash);
+                helperInfo.ArgumentList.Add("-Version");
+                helperInfo.ArgumentList.Add("1.2.4");
+
+                using var helper = System.Diagnostics.Process.Start(helperInfo)!;
+                Assert.That(helper.WaitForExit(10000), Is.True, "the updater helper did not finish after the waited process exited");
+                string logPath = Path.Combine(directory, "kumori-updater.log");
+                string markerPath = Path.Combine(directory, ".kumori-update-installed");
+
+                Assert.Multiple(() =>
+                {
+                    Assert.That(File.ReadAllBytes(target), Is.EqualTo(updated));
+                    Assert.That(File.ReadAllBytes(target + ".bak"), Is.EqualTo(original));
+                    Assert.That(File.Exists(staged), Is.False);
+                    Assert.That(File.ReadAllText(logPath), Does.Contain("Installed Kumori 1.2.4"));
+                    Assert.That(File.ReadAllText(markerPath), Is.EqualTo("1.2.4"));
+                });
+
+                Assert.That(KumoriAutoUpdater.ConsumeInstalledVersion(directory), Is.EqualTo("1.2.4"));
+                Assert.That(File.Exists(markerPath), Is.False, "the success toast marker must only be consumed once");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                    Directory.Delete(directory, true);
+            }
         }
     }
 }

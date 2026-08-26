@@ -1,11 +1,16 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
+using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
+using osu.Game.Overlays;
+using osu.Game.Overlays.Notifications;
+using osu.Game.Rulesets.Kumori.Updates;
 using osuTK;
 using osuTK.Graphics;
 
@@ -17,6 +22,8 @@ namespace osu.Game.Rulesets.Kumori
     /// </summary>
     public partial class KumoriRulesetIcon : CompositeDrawable
     {
+        private IDisposable? updateNotificationSubscription;
+
         public KumoriRulesetIcon()
         {
             Size = new Vector2(32);
@@ -47,6 +54,19 @@ namespace osu.Game.Rulesets.Kumori
                     Font = OsuFont.TorusAlternate.With(size: 22, weight: FontWeight.Bold),
                 },
             ];
+        }
+
+        [BackgroundDependencyLoader]
+        private void load(INotificationOverlay notifications)
+        {
+            updateNotificationSubscription = KumoriUpdateNotificationBus.Attach(message =>
+                Schedule(() => notifications.Post(new SimpleNotification { Text = message })));
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            updateNotificationSubscription?.Dispose();
+            base.Dispose(isDisposing);
         }
     }
 }

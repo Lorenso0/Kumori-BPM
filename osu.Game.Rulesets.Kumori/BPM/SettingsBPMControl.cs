@@ -240,6 +240,12 @@ namespace osu.Game.Rulesets.Kumori.BPM
             private void synchroniseMenuRate(double? sourceBPM = null)
             {
                 KumoriModBPMAdjust? controlMod = getMod();
+
+                // The customisation controls can survive until the end of a frame after a ruleset
+                // switch. Do not let that stale control mutate or refresh the new ruleset's mods.
+                if (selectedMods != null && !BPMSongSelectSynchroniser.ContainsBPMAdjust(selectedMods.Value))
+                    return;
+
                 double source = sourceBPM
                                 ?? (workingBeatmap?.Value is WorkingBeatmap beatmap ? BPMResolver.FromBeatmapInfo(beatmap.BeatmapInfo) : controlMod?.SourceBPM ?? 0);
 
@@ -264,8 +270,10 @@ namespace osu.Game.Rulesets.Kumori.BPM
                 {
                     // Keep official BPM/length displays in sync, but never let a stale settings
                     // control pulse selection after BPM Adjust has actually been deselected.
-                    if (selectedMods?.Value.Any(mod => mod is KumoriModBPMAdjust) == true
-                        && selectedMods is Bindable<IReadOnlyList<Mod>> mutableSelectedMods)
+                    if (selectedMods != null && !BPMSongSelectSynchroniser.ContainsBPMAdjust(selectedMods.Value))
+                        return;
+
+                    if (selectedMods is Bindable<IReadOnlyList<Mod>> mutableSelectedMods)
                         mutableSelectedMods.TriggerChange();
 
                     musicController?.ResetTrackAdjustments();
@@ -380,6 +388,8 @@ namespace osu.Game.Rulesets.Kumori.BPM
 
     internal static class BPMSongSelectSynchroniser
     {
+        public static bool ContainsBPMAdjust(IEnumerable<Mod> mods) => mods.Any(mod => mod is KumoriModBPMAdjust);
+
         public static bool Apply(IEnumerable<KumoriModBPMAdjust> mods, double sourceBPM, double? targetBPM)
         {
             bool changed = false;

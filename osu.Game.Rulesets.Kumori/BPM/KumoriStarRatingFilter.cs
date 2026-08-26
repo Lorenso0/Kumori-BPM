@@ -93,9 +93,14 @@ namespace osu.Game.Rulesets.Kumori.BPM
                 return true;
 
             // An index is populated only by an explicit Calculate Maps pass. Until then, preserve
-            // the full carousel rather than presenting an apparently empty or partially-filtered library.
-            if (!KumoriStarRatingIndex.TryGet(evaluation.ProfileKey, beatmapInfo, out double rating, out bool unavailable))
+            // the full carousel rather than presenting an apparently empty library.
+            if (!KumoriStarRatingIndex.IsLoaded(evaluation.ProfileKey))
                 return true;
+
+            // Once an index is active, unknown entries must not bypass the selected range. They may
+            // be newly imported or unavailable maps, and can be picked up by Calculate Maps again.
+            if (!KumoriStarRatingIndex.TryGet(evaluation.ProfileKey, beatmapInfo, out double rating, out bool unavailable))
+                return false;
 
             return !unavailable && evaluation.Range.Contains(rating);
         }
@@ -214,8 +219,26 @@ namespace osu.Game.Rulesets.Kumori.BPM
 
         internal static void Clear()
         {
-            long revision = Interlocked.Increment(ref nextRevision);
-            Volatile.Write(ref current, new ActiveState(revision, null, KumoriStarRatingFilterMode.Disabled, default));
+            clearIfCurrentProfileMatches(null);
+        }
+
+        internal static bool ClearIfCurrentProfileMatches(string? profileKey) => clearIfCurrentProfileMatches(profileKey);
+
+        private static bool clearIfCurrentProfileMatches(string? profileKey)
+        {
+            while (true)
+            {
+                ActiveState state = Volatile.Read(ref current);
+
+                if (profileKey != null && !string.Equals(state.ProfileKey, profileKey, StringComparison.Ordinal))
+                    return false;
+
+                long revision = Interlocked.Increment(ref nextRevision);
+                var cleared = new ActiveState(revision, null, KumoriStarRatingFilterMode.Disabled, default);
+
+                if (ReferenceEquals(Interlocked.CompareExchange(ref current, cleared, state), state))
+                    return true;
+            }
         }
 
         private sealed record ActiveState(long Revision, string? ProfileKey, KumoriStarRatingFilterMode Mode, KumoriStarRatingRange Range);
@@ -615,7 +638,15 @@ namespace osu.Game.Rulesets.Kumori.BPM
 
             public void NormalisePortableKeys()
             {
-                Ratings = Ratings.ToDictionary(pair => normaliseBeatmapKey(pair.Key), pair => pair.Value, StringComparer.Ordinal);
+                var normalisedRatings = new Dictionary<string, double>(StringComparer.Ordinal);
+
+                // Legacy indexes identified the same beatmap with a local GUID prefix. A beatmap
+                // can therefore appear more than once after those prefixes are removed. Coalesce
+                // those aliases instead of failing the whole JSON-to-SQLite migration.
+                foreach (KeyValuePair<string, double> pair in Ratings)
+                    normalisedRatings[normaliseBeatmapKey(pair.Key)] = pair.Value;
+
+                Ratings = normalisedRatings;
                 UnavailableBeatmaps = UnavailableBeatmaps.Select(normaliseBeatmapKey).ToHashSet(StringComparer.Ordinal);
                 UnavailableBeatmaps.ExceptWith(Ratings.Keys);
             }
