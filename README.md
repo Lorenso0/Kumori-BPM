@@ -58,8 +58,9 @@ already exist, replace any older Kumori DLL, then restart the official client
 and select **Kumori** from the ruleset icons.
 
 On Windows, that first manual installation enables automatic updates. Kumori
-checks the repository's latest non-prerelease GitHub Release at most once every
-six hours, requires the DLL and its SHA-256 asset to agree, and stages a verified
+checks the repository's latest non-prerelease GitHub Release every time osu!
+starts and then every 15 minutes while it remains open, requires the DLL and its
+SHA-256 asset to agree, and stages a verified
 replacement while osu! remains open. A hidden helper installs it after osu!
 closes; an in-game notification announces that the update is ready, and the next
 launch confirms successful installation. The previous DLL remains available as

@@ -1134,6 +1134,12 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
+        public void TestAutoUpdaterChecksEveryFifteenMinutes()
+        {
+            Assert.That(KumoriAutoUpdater.CheckIntervalForTesting, Is.EqualTo(System.TimeSpan.FromMinutes(15)));
+        }
+
+        [Test]
         public void TestAutoUpdaterAcceptsOnlyNewVerifiedGitHubReleaseShape()
         {
             const string release = """

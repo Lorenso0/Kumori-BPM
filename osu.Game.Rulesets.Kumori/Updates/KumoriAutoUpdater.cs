@@ -31,10 +31,11 @@ namespace osu.Game.Rulesets.Kumori.Updates
         private const int maximum_checksum_bytes = 4096;
         private const int maximum_ruleset_bytes = 32 * 1024 * 1024;
 
-        private static readonly TimeSpan check_interval = TimeSpan.FromHours(6);
+        private static readonly TimeSpan check_interval = TimeSpan.FromMinutes(15);
         private static int started;
 
         internal static string ReplacementScriptForTesting => replacement_script;
+        internal static TimeSpan CheckIntervalForTesting => check_interval;
 
         public static void StartIfInstalled()
         {
@@ -52,7 +53,7 @@ namespace osu.Game.Rulesets.Kumori.Updates
             if (installedVersion != null)
                 KumoriUpdateNotificationBus.Post($"Kumori updated successfully to v{installedVersion}.");
 
-            _ = Task.Run(() => checkForUpdate(rulesetPath));
+            _ = Task.Run(() => monitorForUpdates(rulesetPath));
         }
 
         internal static bool IsInstalledRulesetPath(string path) =>
@@ -143,14 +144,24 @@ namespace osu.Game.Rulesets.Kumori.Updates
             return new KumoriUpdateCandidate(releaseVersion, rulesetUri, checksumUri, digest?["sha256:".Length..]);
         }
 
-        private static async Task checkForUpdate(string rulesetPath)
+        private static async Task monitorForUpdates(string rulesetPath)
         {
             string directory = Path.GetDirectoryName(rulesetPath)!;
             string disabledPath = Path.Combine(directory, ".kumori-auto-update.disabled");
             string statePath = Path.Combine(directory, ".kumori-auto-update.state");
 
-            if (File.Exists(disabledPath) || checkedRecently(statePath))
-                return;
+            while (!File.Exists(disabledPath))
+            {
+                if (await checkForUpdate(rulesetPath, statePath).ConfigureAwait(false))
+                    return;
+
+                await Task.Delay(check_interval).ConfigureAwait(false);
+            }
+        }
+
+        private static async Task<bool> checkForUpdate(string rulesetPath, string statePath)
+        {
+            string directory = Path.GetDirectoryName(rulesetPath)!;
 
             try
             {
@@ -170,7 +181,7 @@ namespace osu.Game.Rulesets.Kumori.Updates
                 if (candidate == null)
                 {
                     touchState(statePath, currentVersion);
-                    return;
+                    return false;
                 }
 
                 string checksumText = await downloadText(client, candidate.ChecksumUri, maximum_checksum_bytes).ConfigureAwait(false);
@@ -194,21 +205,11 @@ namespace osu.Game.Rulesets.Kumori.Updates
                 touchState(statePath, candidate.Version);
                 KumoriUpdateNotificationBus.Post($"Kumori v{candidate.Version} is ready and will install when osu! closes.");
                 Logger.Log($"Kumori update {candidate.Version} downloaded and will be installed when osu! closes.", level: LogLevel.Important);
+                return true;
             }
             catch (Exception exception)
             {
                 Logger.Error(exception, "Kumori automatic update check failed");
-            }
-        }
-
-        private static bool checkedRecently(string statePath)
-        {
-            try
-            {
-                return File.Exists(statePath) && DateTime.UtcNow - File.GetLastWriteTimeUtc(statePath) < check_interval;
-            }
-            catch
-            {
                 return false;
             }
         }
