@@ -73,7 +73,11 @@ namespace osu.Game.Rulesets.Kumori
         public override string PlayingVerb => osu.PlayingVerb;
 
         public override DrawableRuleset CreateDrawableRulesetWith(IBeatmap beatmap, IReadOnlyList<Mod>? mods = null) =>
-            new TosuCompatibleDrawableOsuRuleset(this, beatmap, mods, tosuCompatibility);
+            // Keep the selected/scoring ruleset as Kumori, but let the delegated renderer identify as
+            // osu!standard. HUD and skin layouts use DrawableRuleset.Ruleset as their per-ruleset key;
+            // using Kumori here caused lazer's global and legacy osu! HUD defaults to be composed
+            // independently (most visibly as two key counters).
+            new TosuCompatibleDrawableOsuRuleset(osu, beatmap, mods, tosuCompatibility);
 
         public override ScoreProcessor CreateScoreProcessor() => new TosuCompatibleOsuScoreProcessor(tosuCompatibility);
 

@@ -18,6 +18,8 @@ and branding belong to their respective owners.
 - independent Nightcore or metronome beat accents;
 - hitsounds which follow playback rate, music pitch, or preserve pitch;
 - optional DT/HT-style AR and OD scaling;
+- osu!standard HUD, skin layouts, key bindings, and gameplay configuration without
+  duplicate global and legacy skin elements;
 - compact, always-visible CS, AR, OD, HP, OG SR, OG BPM, and BPM Adjust play-rate
   statistics in normal song select;
 - automatic Windows updates from verified `Lorenso0/Kumori-BPM` GitHub Releases,

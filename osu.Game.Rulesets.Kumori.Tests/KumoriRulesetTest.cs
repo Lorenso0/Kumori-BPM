@@ -971,6 +971,24 @@ namespace osu.Game.Rulesets.Kumori.Tests
         }
 
         [Test]
+        public void TestDrawableUsesOfficialOsuIdentityForHudAndSkinLayouts()
+        {
+            var beatmap = new Beatmap<OsuHitObject>();
+            beatmap.HitObjects.Add(new HitCircle { StartTime = 1000 });
+
+            var ruleset = new KumoriRuleset();
+            using var drawable = ruleset.CreateDrawableRulesetWith(beatmap);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(drawable.Ruleset, Is.TypeOf<OsuRuleset>(), "the delegated renderer should use osu!standard's HUD and skin layout key");
+                Assert.That(drawable.Ruleset.RulesetInfo.ShortName, Is.EqualTo("osu"));
+                Assert.That(ruleset.RulesetInfo.ShortName, Is.EqualTo("kumori"), "Kumori must remain the selected and scoring ruleset");
+                Assert.That(ruleset.RulesetInfo.OnlineID, Is.EqualTo(-1));
+            });
+        }
+
+        [Test]
         public void TestTosuCompatibilityTemporarilyPresentsActiveScoreAsOsuStandard()
         {
             var beatmap = new Beatmap<OsuHitObject>();

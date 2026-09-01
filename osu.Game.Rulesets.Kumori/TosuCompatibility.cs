@@ -12,6 +12,7 @@ using osu.Game.Online.API;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Kumori.BPM;
 using osu.Game.Rulesets.Mods;
+using osu.Game.Rulesets.Osu;
 using osu.Game.Rulesets.Osu.Scoring;
 using osu.Game.Rulesets.Osu.UI;
 using osu.Game.Rulesets.Scoring;
@@ -89,7 +90,7 @@ namespace osu.Game.Rulesets.Kumori
     {
         private readonly TosuCompatibilityIdentity identity;
 
-        public TosuCompatibleDrawableOsuRuleset(Ruleset ruleset, IBeatmap beatmap, IReadOnlyList<Mod>? mods, TosuCompatibilityIdentity identity)
+        public TosuCompatibleDrawableOsuRuleset(OsuRuleset ruleset, IBeatmap beatmap, IReadOnlyList<Mod>? mods, TosuCompatibilityIdentity identity)
             : base(ruleset, beatmap, mods)
         {
             this.identity = identity;
